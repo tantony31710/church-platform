@@ -83,7 +83,13 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
         <Line key={i} points={[a, b]} color="#4c7fe0" transparent opacity={0.12} lineWidth={1} />
       ))}
       {positions.map((pos, i) => (
-        <mesh key={i} position={pos} ref={(el) => el && (nodeRefs.current[i] = el)}>
+        <mesh
+          key={i}
+          position={pos}
+          ref={(el) => {
+            if (el) nodeRefs.current[i] = el;
+          }}
+        >
           <sphereGeometry args={[0.045, 12, 12]} />
           <meshStandardMaterial
             color="#7dd3fc"
