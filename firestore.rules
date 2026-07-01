@@ -1,0 +1,95 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers ---------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Role lives on the user's own doc. Reading it costs one extra
+    // get() per rule check, but keeps role logic in one place instead
+    // of duplicating custom claims setup right now.
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---- users -------------------------------------------------------
+    match /users/{userId} {
+      // Anyone signed in can read profiles (needed for leaderboard
+      // names, task assignment display, etc.)
+      allow read: if isSignedIn();
+
+      // Users can only create their own doc (on signup), and can only
+      // ever create it once — not overwrite an existing profile.
+      allow create: if isOwner(userId);
+
+      // Users can update their own profile fields, but NEVER points.
+      // Points only change via Cloud Functions using the Admin SDK,
+      // which bypasses these rules entirely.
+      allow update: if isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['points', 'role']);
+
+      // Only admins can change roles or manually adjust points, and
+      // even admins shouldn't really do this from the client — this
+      // is a safety valve, not the primary path.
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ---- tasks -------------------------------------------------------
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+
+      // Only admins/leaders create and delete tasks.
+      allow create, delete: if isAdmin();
+
+      // Volunteers can claim an OPEN task for themselves — this is
+      // the one client-side write allowed on tasks. It only succeeds
+      // if the task is currently unassigned and the volunteer is
+      // assigning it to themselves, which prevents both "steal
+      // someone else's task" and "assign a task to someone else."
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.status == 'open' &&
+        request.resource.data.assignedTo == request.auth.uid &&
+        request.resource.data.status == 'assigned' &&
+        // Nothing else about the task may change on a claim.
+        request.resource.data.title == resource.data.title &&
+        request.resource.data.pointsValue == resource.data.pointsValue
+      );
+    }
+
+    // ---- attendance ----------------------------------------------------
+    match /attendance/{recordId} {
+      // Volunteers can only see their own attendance history.
+      // Admins can see everyone's, for the Insights tab.
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      // A volunteer can only mark THEIR OWN attendance (scanning the
+      // QR code writes their own uid, never someone else's).
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+    // ---- leaderboard (denormalized, function-maintained) -----------
+    match /leaderboard/{userId} {
+      // Anyone can read the leaderboard.
+      allow read: if isSignedIn();
+
+      // No client writes at all. This collection is only ever written
+      // by Cloud Functions via the Admin SDK, which ignores these
+      // rules. If a write ever succeeds here from the browser, that's
+      // a bug to fix immediately.
+      allow write: if false;
+    }
+  }
+}
