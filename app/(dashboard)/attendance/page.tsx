@@ -13,12 +13,12 @@ export default function AttendancePage() {
   const { role } = useAuth();
 
   if (role !== 'admin') {
-    return <p className="text-sm text-neutral-500">Only leaders can generate attendance codes.</p>;
+    return <p className="text-sm text-foreground/50">Only leaders can generate attendance codes.</p>;
   }
 
   return (
     <div className="max-w-md mx-auto flex flex-col items-center gap-4">
-      <h1 className="text-xl font-medium">Attendance check-in</h1>
+      <h1 className="text-xl font-medium text-foreground">Attendance check-in</h1>
       <QrGenerator eventId={TODAYS_EVENT_ID} />
     </div>
   );

@@ -11,7 +11,14 @@ import dynamic from 'next/dynamic';
 
 const InteractionHub = dynamic(
   () => import('./interaction-hub').then((m) => m.InteractionHub),
-  { ssr: false, loading: () => <div className="h-64 rounded-lg bg-neutral-100 animate-pulse" /> }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-72 rounded-lg glass animate-pulse-glow flex items-center justify-center">
+        <span className="text-xs text-foreground/40">Loading community view...</span>
+      </div>
+    ),
+  }
 );
 
 export default InteractionHub;

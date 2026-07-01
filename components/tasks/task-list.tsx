@@ -81,9 +81,9 @@ export function TaskList() {
     }
   };
 
-  if (loading) return <p className="text-sm text-neutral-500 p-4">Loading available tasks...</p>;
-  if (error) return <p className="text-sm text-red-600 p-4">{error}</p>;
-  if (tasks.length === 0) return <p className="text-sm text-neutral-500 p-4">No open tasks right now.</p>;
+  if (loading) return <p className="text-sm text-foreground/50 p-4">Loading available tasks...</p>;
+  if (error) return <p className="text-sm text-red-400 p-4">{error}</p>;
+  if (tasks.length === 0) return <p className="text-sm text-foreground/50 p-4">No open tasks right now.</p>;
 
   return (
     <motion.div

@@ -19,12 +19,12 @@ export default function InsightsPage() {
   const { role } = useAuth();
 
   if (role !== 'admin') {
-    return <p className="text-sm text-neutral-500">This tab is only available to church leaders.</p>;
+    return <p className="text-sm text-foreground/50">This tab is only available to church leaders.</p>;
   }
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-6">
-      <h1 className="text-xl font-medium">Insights</h1>
+      <h1 className="text-xl font-medium text-foreground">Insights</h1>
       <AttendanceChart data={placeholderData} />
     </div>
   );

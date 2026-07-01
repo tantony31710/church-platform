@@ -3,7 +3,12 @@
 // enforced by firestore.rules, not by hiding this config.
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -19,6 +24,33 @@ const firebaseConfig = {
 // Next.js hot reload in development.
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
+// Offline persistence: caches reads in IndexedDB and queues writes
+// while offline, replaying them once connectivity returns. This is
+// the piece that matters for a church hall with flaky wifi — a
+// volunteer marking attendance mid-dropout still gets a write queued
+// locally instead of a hard failure.
+//
+// persistentMultipleTabManager lets multiple open tabs (or the same
+// site opened twice) share one cache instead of fighting over a lock,
+// which otherwise throws "failed-precondition" in the second tab.
+//
+// initializeFirestore (not getFirestore) must be called before any
+// other Firestore call on this app instance, and only once per app —
+// calling it twice throws. In dev, Next.js Fast Refresh can re-run
+// this module without a full reload, so the try/catch falls back to
+// getFirestore() (which just returns the already-initialized
+// instance) instead of crashing on the second run.
+let dbInstance: ReturnType<typeof initializeFirestore>;
+try {
+  dbInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  });
+} catch {
+  dbInstance = getFirestore(app);
+}
+export const db = dbInstance;
+
 export const auth = getAuth(app);
 export default app;

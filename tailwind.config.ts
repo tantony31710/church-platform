@@ -16,6 +16,7 @@ const config: Config = {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
         },
+        glow: 'hsl(var(--glow))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -23,7 +24,7 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       backdropBlur: {
-        glass: '16px',
+        glass: '20px',
       },
     },
   },
