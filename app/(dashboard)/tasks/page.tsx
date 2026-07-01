@@ -1,14 +1,11 @@
-import dynamic from 'next/dynamic';
 import { TaskList } from '@/components/tasks/task-list';
+import InteractionHub from '@/components/three/interaction-hub-loader';
 
-// The 3D hub is lazy-loaded with ssr:false so it never blocks the
-// initial dashboard paint or gets bundled into the server render —
-// the task list above renders and becomes interactive immediately,
-// the hub fills in a moment later.
-const InteractionHub = dynamic(
-  () => import('@/components/three/interaction-hub').then((m) => m.InteractionHub),
-  { ssr: false, loading: () => <div className="h-64 rounded-lg bg-neutral-100 animate-pulse" /> }
-);
+// This page has no 'use client' — it's a Server Component. That's
+// fine even though everything it renders (TaskList, InteractionHub)
+// is client-side under the hood: the dynamic ssr:false logic lives in
+// interaction-hub-loader.tsx instead of here, which is what keeps
+// this file buildable as a Server Component.
 
 export default function TasksPage() {
   return (
