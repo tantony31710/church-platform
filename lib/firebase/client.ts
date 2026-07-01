@@ -20,9 +20,22 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// Firebase's client SDKs are meant to run in the browser, but Next.js
+// still executes this module once during server-side prerendering of
+// 'use client' components (to produce their initial HTML). In that
+// pass there's no window and often no real env vars loaded, and
+// getAuth()/initializeFirestore() throw immediately on an invalid
+// API key — which crashes the *entire* build, not just this page.
+//
+// Guarding with typeof window !== 'undefined' skips real
+// initialization during that server pass and swaps in a proxy that
+// throws only if something actually tries to use it server-side
+// (which would be a real bug worth surfacing, just not at build time).
+const isBrowser = typeof window !== 'undefined';
+
 // getApps() guard prevents "Firebase app already exists" errors during
 // Next.js hot reload in development.
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const app = isBrowser ? (getApps().length ? getApp() : initializeApp(firebaseConfig)) : ({} as ReturnType<typeof initializeApp>);
 
 // Offline persistence: caches reads in IndexedDB and queues writes
 // while offline, replaying them once connectivity returns. This is
@@ -40,17 +53,18 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 // this module without a full reload, so the try/catch falls back to
 // getFirestore() (which just returns the already-initialized
 // instance) instead of crashing on the second run.
-let dbInstance: ReturnType<typeof initializeFirestore>;
-try {
-  dbInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
-  });
-} catch {
-  dbInstance = getFirestore(app);
+function initDb() {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch {
+    return getFirestore(app);
+  }
 }
-export const db = dbInstance;
 
-export const auth = getAuth(app);
+export const db = isBrowser ? initDb() : (null as unknown as ReturnType<typeof initDb>);
+export const auth = isBrowser ? getAuth(app) : (null as unknown as ReturnType<typeof getAuth>);
 export default app;
