@@ -17,6 +17,7 @@ service cloud.firestore {
     // of duplicating custom claims setup right now.
     function isAdmin() {
       return isSignedIn() &&
+        request.auth.token.email == 'antonkamil72@gmail.com' &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
