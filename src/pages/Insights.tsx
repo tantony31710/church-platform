@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { AttendanceChart } from '@/components/insights/attendance-chart';
+import { AttendanceChart, AttendancePoint } from '@/components/insights/attendance-chart';
 import { FeatureImportance } from '@/components/insights/feature-importance';
 import { DataDriftMonitor } from '@/components/insights/data-drift-monitor';
 import { EmbeddingClusters } from '@/components/insights/embedding-clusters';
@@ -16,6 +16,7 @@ export default function InsightsPage() {
     activeTasks: 0,
     totalPoints: 0,
   });
+  const [attendanceData, setAttendanceData] = useState<AttendancePoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,10 +35,24 @@ export default function InsightsPage() {
       setStats(prev => ({ ...prev, activeTasks: active }));
     });
 
+    const unsubscribeAttendance = onSnapshot(collection(db, 'attendance'), (snap) => {
+      const records = snap.docs.map(d => d.data());
+      const aggregated: Record<string, number> = {};
+      records.forEach(r => {
+        if (r.timestamp) {
+          const date = r.timestamp.toDate().toLocaleDateString();
+          aggregated[date] = (aggregated[date] || 0) + 1;
+        }
+      });
+      const data = Object.entries(aggregated).map(([date, count]) => ({ date, count }));
+      setAttendanceData(data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    });
+
     setLoading(false);
     return () => {
       unsubscribeUsers();
       unsubscribeTasks();
+      unsubscribeAttendance();
     };
   }, []);
 
@@ -61,7 +76,7 @@ export default function InsightsPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 glass-strong glow-ring p-6 rounded-xl">
           <h2 className="text-sm font-medium text-foreground mb-6">Attendance Trends</h2>
-          <AttendanceChart />
+          <AttendanceChart data={attendanceData} />
         </div>
         <div className="glass-strong glow-ring p-6 rounded-xl flex flex-col gap-4">
           <h2 className="text-sm font-medium text-foreground mb-2">Data Summary</h2>

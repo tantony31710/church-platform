@@ -1,6 +1,6 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-interface AttendancePoint {
+export interface AttendancePoint {
   date: string;
   count: number;
 }
