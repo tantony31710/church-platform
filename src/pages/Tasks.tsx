@@ -34,7 +34,7 @@ export default function TasksPage() {
             <div className="h-3 w-px bg-border" />
             <span className="text-foreground/60">Points: <span className="text-glow font-medium">{profile.points}</span></span>
             <div className="h-3 w-px bg-border" />
-            <span className="text-foreground/60">Skills: <span className="text-foreground font-medium">{profile.skills.length}</span></span>
+            <span className="text-foreground/60">Skills: <span className="text-foreground font-medium">{profile.skills?.length || 0}</span></span>
           </motion.div>
         )}
       </div>

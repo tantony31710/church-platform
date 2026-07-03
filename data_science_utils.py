@@ -54,20 +54,25 @@ class DataScienceAnalyzer:
     """Main class for data science operations on church-platform Firestore."""
     
     def __init__(self, service_account_path: Optional[str] = None):
-        """Initialize Firebase connection."""
+        """Initialize Firebase connection using ADC or Service Account Key."""
         if not firebase_admin._apps:
-            path = service_account_path or os.environ.get(
-                "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
-            )
-            
-            if not os.path.exists(path):
-                raise FileNotFoundError(
-                    f"Service account key not found: {path}\n"
-                    "Get it from: Firebase Console → Project Settings → Service Accounts"
+            try:
+                # Try ADC (Application Default Credentials) first
+                firebase_admin.initialize_app()
+            except Exception:
+                # Fallback to service account key
+                path = service_account_path or os.environ.get(
+                    "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
                 )
-            
-            cred = credentials.Certificate(path)
-            firebase_admin.initialize_app(cred)
+                
+                if not path or not os.path.exists(path):
+                    raise FileNotFoundError(
+                        f"No ADC found and service account key not found: {path}\n"
+                        "Run: gcloud auth application-default login"
+                    )
+                
+                cred = credentials.Certificate(path)
+                firebase_admin.initialize_app(cred)
         
         self.db = firestore.client()
     

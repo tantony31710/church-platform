@@ -21,14 +21,22 @@ export function useUserProfile() {
       setLoading(false);
       return;
     }
-    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+    const unsubscribeRole = onSnapshot(doc(db, 'users', user.uid), (snap) => {
       if (snap.exists()) {
-        setProfile({ id: snap.id, ...(snap.data() as Omit<UserProfile, 'id'>) });
+        const data = snap.data();
+        setProfile({ 
+          id: snap.id, 
+          ...data,
+          skills: data.skills || [], // Ensure skills is always an array
+        } as UserProfile);
+      } else {
+        setProfile(null);
       }
       setLoading(false);
     });
-    return () => unsubscribe();
-  }, [user]);
+    return () => unsubscribeRole();
+    }, [user]);
+
 
   return { profile, loading };
 }

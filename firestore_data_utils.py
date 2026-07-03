@@ -25,13 +25,23 @@ from firebase_admin import credentials, firestore
 import pandas as pd
 
 # ---- Setup ----------------------------------------------------------
-SERVICE_ACCOUNT_PATH = os.environ.get(
-    "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
-)
+def init_firestore():
+    """Initialize Firebase Admin SDK using ADC or Service Account Key."""
+    try:
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+    except Exception:
+        service_account_path = os.environ.get(
+            "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
+        )
+        if os.path.exists(service_account_path):
+            if not firebase_admin._apps:
+                cred = credentials.Certificate(service_account_path)
+                firebase_admin.initialize_app(cred)
+    
+    return firestore.client()
 
-cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+db = init_firestore()
 
 
 # ---- 1. Seed sample tasks --------------------------------------------

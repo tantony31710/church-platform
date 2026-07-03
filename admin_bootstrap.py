@@ -34,27 +34,34 @@ from firebase_admin import credentials, firestore, auth as firebase_auth
 
 
 def init_firebase():
-    """Initialize Firebase Admin SDK."""
-    service_account_path = os.environ.get(
-        "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
-    )
-    
-    if not os.path.exists(service_account_path):
-        print(f"❌ Error: {service_account_path} not found")
-        print("\nSetup instructions:")
-        print("1. Go to Firebase Console → Project Settings → Service Accounts")
-        print("2. Click 'Generate New Private Key'")
-        print("3. Save as 'serviceAccountKey.json' in the project root")
-        print("4. Add to .gitignore (DO NOT commit to git)")
-        sys.exit(1)
-    
+    """Initialize Firebase Admin SDK using ADC or Service Account Key."""
     try:
-        cred = credentials.Certificate(service_account_path)
-        firebase_admin.initialize_app(cred)
+        # Try initializing with Application Default Credentials (ADC) first
+        # This works if the user has run 'gcloud auth application-default login'
+        firebase_admin.initialize_app()
         return firestore.client()
-    except Exception as e:
-        print(f"❌ Firebase initialization failed: {e}")
-        sys.exit(1)
+    except ValueError:
+        # firebase_admin.initialize_app() raises ValueError if app already exists
+        return firestore.client()
+    except Exception:
+        # Fallback to service account key file
+        service_account_path = os.environ.get(
+            "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
+        )
+        
+        if not os.path.exists(service_account_path):
+            print(f"❌ Error: No ADC found and {service_account_path} not found")
+            print("\nTo fix this, run:")
+            print("  gcloud auth application-default login")
+            sys.exit(1)
+        
+        try:
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin.initialize_app(cred)
+            return firestore.client()
+        except Exception as e:
+            print(f"❌ Firebase initialization failed: {e}")
+            sys.exit(1)
 
 
 def find_user_by_email(db, email):
