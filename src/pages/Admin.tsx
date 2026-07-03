@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { TaskForm } from '@/components/admin/task-form';
 import { TaskManager } from '@/components/admin/task-manager';
 import { VolunteerManager } from '@/components/admin/volunteer-manager';
-import { Database, Cpu, Activity } from 'lucide-react';
+import { Database, Cpu, Activity, Megaphone } from 'lucide-react';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/client';
 
 type Tab = 'tasks' | 'volunteers' | 'data-ai';
 
@@ -11,6 +13,32 @@ export default function AdminPage() {
   const { role } = useAuth();
   const [tab, setTab] = useState<Tab>('tasks');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [announcement, setAnnouncement] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchAnnouncement = async () => {
+      const snap = await getDoc(doc(db, 'config', 'announcements'));
+      if (snap.exists()) {
+        setAnnouncement(snap.data().message || '');
+      }
+    };
+    fetchAnnouncement();
+  }, []);
+
+  const saveAnnouncement = async () => {
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'config', 'announcements'), { 
+        message: announcement, 
+        updatedAt: new Date() 
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (role !== 'admin') {
     return <p className="text-sm text-foreground/50">This page is only available to church leaders.</p>;
@@ -39,7 +67,29 @@ export default function AdminPage() {
 
       {tab === 'tasks' ? (
         <div className="grid gap-6 md:grid-cols-[320px_1fr] items-start">
-          <TaskForm onCreated={() => setRefreshKey((k) => k + 1)} />
+          <div className="flex flex-col gap-6">
+            <TaskForm onCreated={() => setRefreshKey((k) => k + 1)} />
+            
+            <div className="glass-strong glow-ring p-5 rounded-xl flex flex-col gap-4">
+              <div className="flex items-center gap-2 text-glow">
+                <Megaphone className="h-4 w-4" />
+                <h2 className="text-sm font-medium">Global Announcement</h2>
+              </div>
+              <textarea
+                value={announcement}
+                onChange={(e) => setAnnouncement(e.target.value)}
+                placeholder="Enter urgent message for volunteers..."
+                className="h-24 rounded-md border border-border bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-glow/50 transition-colors resize-none"
+              />
+              <button 
+                onClick={saveAnnouncement}
+                disabled={isSaving}
+                className="w-full py-2 rounded-md bg-glow/20 text-glow border border-glow/30 text-xs font-medium hover:bg-glow/30 transition-colors"
+              >
+                {isSaving ? 'Saving...' : 'Publish to Tasks Page'}
+              </button>
+            </div>
+          </div>
           <TaskManager key={refreshKey} />
         </div>
       ) : tab === 'volunteers' ? (

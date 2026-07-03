@@ -1,7 +1,10 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { TaskList } from '@/components/tasks/task-list';
 import { useUserProfile } from '@/lib/hooks/use-user-profile';
 import { motion } from 'framer-motion';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase/client';
+import { AnnouncementBanner } from '@/components/ui/announcement-banner';
 
 // React.lazy + Suspense is Vite's equivalent of Next's
 // next/dynamic(..., { ssr: false }) — except there's no ssr:false
@@ -15,6 +18,16 @@ const InteractionHub = lazy(() =>
 
 export default function TasksPage() {
   const { profile, loading } = useUserProfile();
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'config', 'announcements'), (snap) => {
+      if (snap.exists()) {
+        setAnnouncement(snap.data().message || null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto">
@@ -38,6 +51,8 @@ export default function TasksPage() {
           </motion.div>
         )}
       </div>
+
+      {announcement && <AnnouncementBanner message={announcement} />}
 
       <Suspense
         fallback={
