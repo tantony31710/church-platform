@@ -5,6 +5,7 @@ import { ListTodo, QrCode, Trophy, LineChart, ShieldCheck, LogOut } from 'lucide
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth-context';
+import { AmbientBackground } from '@/components/ui/ambient-background';
 
 const navItems = [
   { to: '/tasks', label: 'Tasks', icon: ListTodo },
@@ -44,6 +45,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen">
+      <AmbientBackground />
       <nav className="sticky top-0 z-20 glass-strong px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-1">
           <span className="mr-4 text-sm font-semibold text-foreground/90 tracking-tight">

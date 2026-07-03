@@ -4,6 +4,7 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { Plus } from 'lucide-react';
 import { db } from '@/lib/firebase/client';
 import { Button, Card } from '@/components/ui/button';
+import { useToast } from '@/lib/toast-context';
 
 const inputClass =
   'h-10 rounded-md border border-border bg-white/5 px-3 text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-glow/50 transition-colors';
@@ -14,6 +15,7 @@ const inputClass =
 // collection. A non-admin who somehow called this code directly would
 // still be rejected server-side.
 export function TaskForm({ onCreated }: { onCreated?: () => void }) {
+  const { showToast } = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [requiredSkill, setRequiredSkill] = useState('');
@@ -42,9 +44,11 @@ export function TaskForm({ onCreated }: { onCreated?: () => void }) {
       setDeadline('');
       setPointsValue(10);
       onCreated?.();
+      showToast(`"${title}" created and open for volunteers`, 'success');
     } catch (err) {
       console.error('Error creating task:', err);
       setError('Could not create task. Please try again.');
+      showToast('Could not create task', 'error');
     } finally {
       setSubmitting(false);
     }

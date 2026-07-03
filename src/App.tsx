@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/lib/auth-context';
+import { ToastProvider } from '@/lib/toast-context';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import LoginPage from '@/pages/Login';
 import RegisterPage from '@/pages/Register';
@@ -19,19 +20,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<Navigate to="/tasks" replace />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route element={<DashboardLayout />}>
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/attendance" element={<AttendancePage />} />
-            <Route path="/leaderboard" element={<LeaderboardPage />} />
-            <Route path="/insights" element={<InsightsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/tasks" replace />} />
-        </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route path="/" element={<Navigate to="/tasks" replace />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route element={<DashboardLayout />}>
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/attendance" element={<AttendancePage />} />
+              <Route path="/leaderboard" element={<LeaderboardPage />} />
+              <Route path="/insights" element={<InsightsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/tasks" replace />} />
+          </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

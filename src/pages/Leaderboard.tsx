@@ -4,6 +4,7 @@ import { onSnapshot, collection, query, orderBy, limit as fbLimit } from 'fireba
 import { db } from '@/lib/firebase/client';
 import { Card, Button } from '@/components/ui/button';
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query';
+import { LeaderboardRowSkeleton } from '@/components/ui/skeleton';
 import type { LeaderboardEntry } from '@/lib/types';
 
 export default function LeaderboardPage() {
@@ -31,7 +32,16 @@ export default function LeaderboardPage() {
 
   const extraRanked = extra.slice(10).map((entry, i) => ({ ...entry, id: entry.id, rank: 11 + i }));
 
-  if (loadingTop) return <p className="text-sm text-foreground/50">Loading leaderboard...</p>;
+  if (loadingTop) {
+    return (
+      <div className="max-w-lg mx-auto flex flex-col gap-2">
+        <h1 className="text-xl font-medium text-foreground mb-2">Top volunteers</h1>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <LeaderboardRowSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
 
   const allEntries = [...topTen, ...extraRanked];
 

@@ -1,6 +1,6 @@
 import { useRef, useMemo, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Line } from '@react-three/drei';
+import { Line, Ring } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface NodeGraphProps {
@@ -18,6 +18,35 @@ function fibonacciSphere(count: number, radius: number): THREE.Vector3[] {
     points.push(new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).multiplyScalar(radius));
   }
   return points;
+}
+
+// Two thin wireframe rings orbiting at different angles/speeds around
+// the node-sphere — a common "premium tech" 3D motif (think Stripe's
+// or Linear's marketing sites) that reads as depth even though it's
+// just two flat circles rotating in 3D space.
+function OrbitRings() {
+  const ring1 = useRef<THREE.Mesh>(null);
+  const ring2 = useRef<THREE.Mesh>(null);
+
+  useFrame((_, delta) => {
+    if (ring1.current) ring1.current.rotation.z += delta * 0.15;
+    if (ring2.current) ring2.current.rotation.z -= delta * 0.1;
+  });
+
+  return (
+    <>
+      <group rotation={[Math.PI / 2.6, 0, 0]}>
+        <Ring ref={ring1} args={[2.7, 2.72, 64]}>
+          <meshBasicMaterial color="#22d3ee" transparent opacity={0.25} side={THREE.DoubleSide} />
+        </Ring>
+      </group>
+      <group rotation={[Math.PI / 1.8, Math.PI / 5, 0]}>
+        <Ring ref={ring2} args={[3.05, 3.07, 64]}>
+          <meshBasicMaterial color="#5eead4" transparent opacity={0.18} side={THREE.DoubleSide} />
+        </Ring>
+      </group>
+    </>
+  );
 }
 
 function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
@@ -55,7 +84,7 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
   return (
     <group ref={groupRef}>
       {edges.map(([a, b], i) => (
-        <Line key={i} points={[a, b]} color="#4c7fe0" transparent opacity={0.12} lineWidth={1} />
+        <Line key={i} points={[a, b]} color="#22d3ee" transparent opacity={0.14} lineWidth={1} />
       ))}
       {positions.map((pos, i) => (
         <mesh
@@ -66,9 +95,10 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
           }}
         >
           <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#7dd3fc" emissive="#38bdf8" emissiveIntensity={1.2} toneMapped={false} />
+          <meshStandardMaterial color="#67e8f9" emissive="#22d3ee" emissiveIntensity={1.3} toneMapped={false} />
         </mesh>
       ))}
+      <OrbitRings />
     </group>
   );
 }
@@ -83,11 +113,11 @@ export function InteractionHub({ volunteerCount = 16 }: { volunteerCount?: numbe
 
   return (
     <div className="relative h-72 w-full rounded-lg overflow-hidden glass glow-ring">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-glow/5 via-transparent to-accent/5" />
-      <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-glow/10 via-transparent to-accent/10" />
+      <Canvas camera={{ position: [0, 0, 6.5], fov: 45 }}>
         <ambientLight intensity={0.4} />
-        <pointLight position={[5, 5, 5]} intensity={0.6} color="#7dd3fc" />
-        <pointLight position={[-5, -3, -5]} intensity={0.3} color="#7f77dd" />
+        <pointLight position={[5, 5, 5]} intensity={0.7} color="#67e8f9" />
+        <pointLight position={[-5, -3, -5]} intensity={0.35} color="#22d3ee" />
         <PointerTracker onMove={(x, y) => setPointer({ x, y })} />
         <NodeGraph nodeCount={volunteerCount} pointer={pointer} />
       </Canvas>
