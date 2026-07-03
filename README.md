@@ -1,42 +1,42 @@
-# Church Volunteer Platform
+# Church Volunteer Platform (Vite)
 
 Volunteer matching, attendance (QR check-in), and points/leaderboard
-for a church community, built on Next.js + Firebase.
+for a church community — Vite + React + TypeScript + Firebase.
+
+Migrated from Next.js. The app is 100% client-rendered (Firebase
+Auth/Firestore only work in the browser anyway), so Vite is a more
+direct fit than Next.js was — no server-side prerendering, no
+`ssr: false` boundary rules, no server/client component split.
 
 ## Structure
 
-- `app/` — Next.js App Router pages (auth routes + role-gated dashboard)
-- `components/` — UI components, grouped by feature
-- `lib/` — Firebase client/admin init, shared types, auth context
-- `functions/` — Cloud Functions (points calculation, runs server-side
-  via Admin SDK — separate deploy target from the Next.js app)
-- `firestore.rules` — security rules enforcing admin/volunteer RBAC
-- `firestore.indexes.json` — composite indexes the queries in this
-  app require (Firestore will also prompt you for these the first
-  time an unindexed query runs, if you forget to deploy this file)
+- `src/pages/` — one file per route (React Router, not file-based routing)
+- `src/components/` — UI components, grouped by feature
+- `src/lib/` — Firebase init, shared types, auth context, hooks
+- `functions/` — Cloud Functions (points calculation via Admin SDK —
+  separate deploy target, unaffected by the Next.js → Vite switch)
+- `firestore.rules` / `firestore.indexes.json` — unchanged from before
 
 ## Setup
 
-1. `npm install` in the project root, then `cd functions && npm install`
-2. Create a Firebase project, enable Firestore + Authentication (Email/Password)
-3. Copy `.env.local.example` to `.env.local` and fill in your Firebase
-   client config (Project Settings > General > Your apps)
-4. For the Admin SDK (functions + firestore_data_utils.py), generate a
-   service account key (Project Settings > Service Accounts) — do NOT
-   commit it
-5. `firebase deploy --only firestore:rules,firestore:indexes,functions`
-6. `npm run dev`
+1. `npm install`, then `cd functions && npm install`
+2. Create/use a Firebase project, enable Firestore + Email/Password Auth
+3. Copy `.env.example` to `.env` and fill in `VITE_FIREBASE_*` values
+   (Vite requires the `VITE_` prefix to expose a var to browser code —
+   this replaces Next.js's `NEXT_PUBLIC_` prefix)
+4. `firebase deploy --only firestore:rules,firestore:indexes,functions`
+5. `npm run dev`
 
-## Build order (recommended)
+## Deploying to Vercel
 
-1. Get `TaskList` + `TaskCard` working against a real Firestore project
-   in test mode (permissive rules) — confirm the volunteer matching
-   loop works end to end
-2. Deploy `firestore.rules` and confirm claiming a task still works
-   (rules bugs show up as silent permission-denied errors here)
-3. Deploy the Cloud Functions and confirm points actually increment
-   on task completion
-4. Layer in the QR attendance flow
-5. Layer in the 3D hub, Framer Motion polish, and Insights charts last
-   — these are presentation, not logic, and are much easier to add to
-   a working app than logic is to add to a pretty one
+Vercel auto-detects Vite projects. Framework preset: Vite. Build
+command: `npm run build`. Output directory: `dist`.
+
+`vercel.json` in this repo handles the one Vite-specific gotcha:
+without it, refreshing the browser on a route like `/tasks` 404s,
+because there's no actual file at that path — React Router only
+knows about it client-side. The rewrite rule sends every path to
+`index.html` so React Router can take over.
+
+Env vars go in Vercel's dashboard exactly like before, just renamed
+to the `VITE_` prefix instead of `NEXT_PUBLIC_`.
