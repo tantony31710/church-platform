@@ -4,6 +4,8 @@ import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/f
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth-context';
 import { TaskCard } from './task-card';
+import { TaskCardSkeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/lib/toast-context';
 import type { Task } from '@/lib/types';
 
 const containerVariants = {
@@ -13,6 +15,7 @@ const containerVariants = {
 
 export function TaskList() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,21 +47,28 @@ export function TaskList() {
 
   const handleVolunteer = async (taskId: string) => {
     if (!user) {
-      setError('You must be logged in to volunteer.');
+      showToast('You must be logged in to volunteer.', 'error');
       return;
     }
     setVolunteeringId(taskId);
     try {
       await updateDoc(doc(db, 'tasks', taskId), { assignedTo: user.uid, status: 'assigned' });
+      showToast('You have successfully volunteered for this task!');
     } catch (err) {
       console.error('Error volunteering:', err);
-      setError('Something went wrong. Please try again.');
+      showToast('Something went wrong. Please try again.', 'error');
     } finally {
       setVolunteeringId(null);
     }
   };
 
-  if (loading) return <p className="text-sm text-foreground/50 p-4">Loading available tasks...</p>;
+  if (loading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {[...Array(6)].map((_, i) => <TaskCardSkeleton key={i} />)}
+      </div>
+    );
+  }
   if (error) return <p className="text-sm text-red-400 p-4">{error}</p>;
   if (tasks.length === 0) return <p className="text-sm text-foreground/50 p-4">No open tasks right now.</p>;
 

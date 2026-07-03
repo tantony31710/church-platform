@@ -1,6 +1,6 @@
 import { useRef, useMemo, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Line } from '@react-three/drei';
+import { Line, Ring } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface NodeGraphProps {
@@ -23,6 +23,7 @@ function fibonacciSphere(count: number, radius: number): THREE.Vector3[] {
 function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeRefs = useRef<THREE.Mesh[]>([]);
+  const ringRef = useRef<THREE.Mesh>(null);
 
   const positions = useMemo(() => fibonacciSphere(nodeCount, 2.2), [nodeCount]);
 
@@ -44,6 +45,11 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
     const targetX = pointer.y * 0.25;
     groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, targetX, 0.04);
 
+    if (ringRef.current) {
+      ringRef.current.rotation.z += delta * 0.2;
+      ringRef.current.rotation.x += delta * 0.1;
+    }
+
     const t = state.clock.elapsedTime;
     nodeRefs.current.forEach((mesh, i) => {
       if (!mesh) return;
@@ -54,8 +60,11 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
 
   return (
     <group ref={groupRef}>
+      <Ring ref={ringRef} args={[3.5, 3.6, 64]} rotation={[Math.PI / 2, 0, 0]}>
+        <meshStandardMaterial color="#2dd4bf" transparent opacity={0.2} side={THREE.DoubleSide} />
+      </Ring>
       {edges.map(([a, b], i) => (
-        <Line key={i} points={[a, b]} color="#4c7fe0" transparent opacity={0.12} lineWidth={1} />
+        <Line key={i} points={[a, b]} color="#2dd4bf" transparent opacity={0.12} lineWidth={1} />
       ))}
       {positions.map((pos, i) => (
         <mesh
@@ -66,7 +75,7 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
           }}
         >
           <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#7dd3fc" emissive="#38bdf8" emissiveIntensity={1.2} toneMapped={false} />
+          <meshStandardMaterial color="#7dd3fc" emissive="#2dd4bf" emissiveIntensity={1.2} toneMapped={false} />
         </mesh>
       ))}
     </group>
@@ -87,7 +96,7 @@ export function InteractionHub({ volunteerCount = 16 }: { volunteerCount?: numbe
       <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
         <ambientLight intensity={0.4} />
         <pointLight position={[5, 5, 5]} intensity={0.6} color="#7dd3fc" />
-        <pointLight position={[-5, -3, -5]} intensity={0.3} color="#7f77dd" />
+        <pointLight position={[-5, -3, -5]} intensity={0.3} color="#2dd4bf" />
         <PointerTracker onMove={(x, y) => setPointer({ x, y })} />
         <NodeGraph nodeCount={volunteerCount} pointer={pointer} />
       </Canvas>
