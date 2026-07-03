@@ -4,8 +4,6 @@ import { motion } from 'framer-motion';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 import { Button, Card } from '@/components/ui/button';
-import { TiltCard } from '@/components/ui/tilt-card';
-import { AmbientBackground } from '@/components/ui/ambient-background';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -31,14 +29,12 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <AmbientBackground />
       <motion.div
         initial={{ opacity: 0, y: 16, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         className="w-full max-w-sm"
       >
-        <TiltCard maxTilt={4}>
         <Card className="p-6 glow-ring">
           <h1 className="text-lg font-medium mb-4 text-foreground">Sign in</h1>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -64,7 +60,6 @@ export default function LoginPage() {
             </Button>
           </form>
         </Card>
-        </TiltCard>
       </motion.div>
     </div>
   );

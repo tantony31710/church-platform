@@ -1,0 +1,28 @@
+# Data Science & AI Engineering Dependencies for Church Platform
+# Install with: pip install -r requirements-datascience.txt
+
+# Firebase
+firebase-admin==6.4.0
+
+# Data Processing
+pandas==2.1.3
+numpy==1.24.3
+
+# Machine Learning
+scikit-learn==1.3.2
+scipy==1.11.4
+xgboost==2.0.3
+
+# Visualization
+matplotlib==3.8.2
+seaborn==0.13.0
+plotly==5.18.0
+
+# Utilities
+joblib==1.3.2
+python-dotenv==1.0.0
+
+# Optional: Jupyter for interactive analysis
+jupyter==1.0.0
+notebook==7.0.6
+ipython==8.18.1
