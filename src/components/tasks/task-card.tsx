@@ -19,6 +19,7 @@ export function TaskCard({ task, onVolunteer, isSubmitting }: TaskCardProps) {
         exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.15 } }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         whileHover={{ y: -4 }}
+        whileTap={{ scale: 0.98 }}
         className="h-full"
       >
         <Card className="p-5 flex flex-col justify-between h-full transition-colors duration-300 group-hover:border-glow/40 group-hover:shadow-[0_0_30px_hsl(var(--glow)/0.12)]">

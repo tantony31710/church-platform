@@ -3,6 +3,11 @@ import { motion } from 'framer-motion';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { AttendanceChart } from '@/components/insights/attendance-chart';
+import { FeatureImportance } from '@/components/insights/feature-importance';
+import { DataDriftMonitor } from '@/components/insights/data-drift-monitor';
+import { EmbeddingClusters } from '@/components/insights/embedding-clusters';
+import { TimeSeriesDecomposition } from '@/components/insights/time-series-decomposition';
+import { CorrelationNetwork } from '@/components/insights/correlation-network';
 import { Users, CheckCircle, TrendingUp, Award } from 'lucide-react';
 
 export default function InsightsPage() {
@@ -79,6 +84,29 @@ export default function InsightsPage() {
           <button className="mt-auto w-full py-2 rounded-md bg-white/5 hover:bg-white/10 border border-border text-xs transition-colors">
             Export Full Report (CSV)
           </button>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="glass-strong glow-ring p-6 rounded-xl">
+          <h2 className="text-sm font-medium text-foreground mb-6">Feature Importance</h2>
+          <FeatureImportance />
+        </div>
+        <div className="glass-strong glow-ring p-6 rounded-xl">
+          <h2 className="text-sm font-medium text-foreground mb-6">Data Drift Monitor</h2>
+          <DataDriftMonitor />
+        </div>
+        <div className="glass-strong glow-ring p-6 rounded-xl">
+          <h2 className="text-sm font-medium text-foreground mb-6">Embedding Clusters</h2>
+          <EmbeddingClusters />
+        </div>
+        <div className="glass-strong glow-ring p-6 rounded-xl">
+          <h2 className="text-sm font-medium text-foreground mb-6">Time-Series Decomposition</h2>
+          <TimeSeriesDecomposition />
+        </div>
+        <div className="glass-strong glow-ring p-6 rounded-xl">
+          <h2 className="text-sm font-medium text-foreground mb-6">Correlation Network</h2>
+          <CorrelationNetwork />
         </div>
       </div>
     </div>

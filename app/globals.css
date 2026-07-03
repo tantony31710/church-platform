@@ -12,6 +12,16 @@
   --accent-foreground: 0 0% 100%;
   --glow: 180 100% 50%;
   --radius: 0.9rem;
+  transition: --accent 0.5s ease, --glow 0.5s ease;
+}
+
+:root[data-theme='cool'] {
+  --accent: 190 90% 50%;
+  --glow: 180 100% 50%;
+}
+:root[data-theme='energetic'] {
+  --accent: 30 90% 60%;
+  --glow: 20 100% 50%;
 }
 
 * {

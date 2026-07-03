@@ -8,7 +8,16 @@ interface NodeGraphProps {
   pointer: { x: number; y: number };
 }
 
-function fibonacciSphere(count: number, radius: number): THREE.Vector3[] {
+function generateLayout(count: number, type: 'sphere' | 'random', radius: number): THREE.Vector3[] {
+  if (type === 'random') {
+    return Array.from({ length: count }, () => 
+      new THREE.Vector3(
+          (Math.random() - 0.5) * radius * 2,
+          (Math.random() - 0.5) * radius * 2,
+          (Math.random() - 0.5) * radius * 2
+      )
+    );
+  }
   const points: THREE.Vector3[] = [];
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < count; i++) {
@@ -22,33 +31,19 @@ function fibonacciSphere(count: number, radius: number): THREE.Vector3[] {
 
 function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const parallaxRef = useRef<THREE.Group>(null);
   const nodeRefs = useRef<THREE.Mesh[]>([]);
-  const ringRef = useRef<THREE.Mesh>(null);
 
-  const positions = useMemo(() => fibonacciSphere(nodeCount, 2.2), [nodeCount]);
-
-  const edges = useMemo(() => {
-    const lines: [THREE.Vector3, THREE.Vector3][] = [];
-    positions.forEach((p, i) => {
-      const distances = positions
-        .map((q, j) => ({ j, d: i === j ? Infinity : p.distanceTo(q) }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, 2);
-      distances.forEach(({ j }) => lines.push([p, positions[j]]));
-    });
-    return lines;
-  }, [positions]);
+  const positions = useMemo(() => generateLayout(nodeCount, 'sphere', 2.2), [nodeCount]);
+  const parallaxPositions = useMemo(() => generateLayout(nodeCount, 'random', 4), [nodeCount]);
 
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    if (!groupRef.current || !parallaxRef.current) return;
     groupRef.current.rotation.y += delta * 0.06;
-    const targetX = pointer.y * 0.25;
-    groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, targetX, 0.04);
-
-    if (ringRef.current) {
-      ringRef.current.rotation.z += delta * 0.2;
-      ringRef.current.rotation.x += delta * 0.1;
-    }
+    
+    // Parallax effect
+    parallaxRef.current.rotation.y = -pointer.x * 0.2;
+    parallaxRef.current.rotation.x = pointer.y * 0.2;
 
     const t = state.clock.elapsedTime;
     nodeRefs.current.forEach((mesh, i) => {
@@ -59,27 +54,37 @@ function NodeGraph({ nodeCount, pointer }: NodeGraphProps) {
   });
 
   return (
-    <group ref={groupRef}>
-      <Ring ref={ringRef} args={[3.5, 3.6, 64]} rotation={[Math.PI / 2, 0, 0]}>
-        <meshStandardMaterial color="#2dd4bf" transparent opacity={0.2} side={THREE.DoubleSide} />
-      </Ring>
-      {edges.map(([a, b], i) => (
-        <Line key={i} points={[a, b]} color="#2dd4bf" transparent opacity={0.12} lineWidth={1} />
-      ))}
-      {positions.map((pos, i) => (
-        <mesh
-          key={i}
-          position={pos}
-          ref={(el) => {
-            if (el) nodeRefs.current[i] = el;
-          }}
-        >
-          <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color="#7dd3fc" emissive="#2dd4bf" emissiveIntensity={1.2} toneMapped={false} />
-        </mesh>
-      ))}
+    <group>
+      <group ref={groupRef}>
+        {positions.map((pos, i) => (
+          <mesh key={i} position={pos} ref={(el) => { if (el) nodeRefs.current[i] = el; }}>
+            <sphereGeometry args={[0.045, 12, 12]} />
+            <meshStandardMaterial color="#7dd3fc" emissive="#2dd4bf" emissiveIntensity={2} toneMapped={false} />
+          </mesh>
+        ))}
+      </group>
+      <group ref={parallaxRef}>
+        {parallaxPositions.map((pos, i) => (
+          <mesh key={i} position={pos}>
+            <sphereGeometry args={[0.02, 8, 8]} />
+            <meshStandardMaterial color="#ffffff" transparent opacity={0.3} />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
+}
+
+function CameraController({ pointer }: { pointer: { x: number; y: number } }) {
+  const { camera } = useThree();
+  useFrame((state, delta) => {
+    const targetX = pointer.x * 0.5;
+    const targetY = pointer.y * 0.5;
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetX, delta * 2);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, delta * 2);
+    camera.lookAt(0, 0, 0);
+  });
+  return null;
 }
 
 function PointerTracker({ onMove }: { onMove: (x: number, y: number) => void }) {
@@ -98,6 +103,7 @@ export function InteractionHub({ volunteerCount = 16 }: { volunteerCount?: numbe
         <pointLight position={[5, 5, 5]} intensity={0.6} color="#7dd3fc" />
         <pointLight position={[-5, -3, -5]} intensity={0.3} color="#2dd4bf" />
         <PointerTracker onMove={(x, y) => setPointer({ x, y })} />
+        <CameraController pointer={pointer} />
         <NodeGraph nodeCount={volunteerCount} pointer={pointer} />
       </Canvas>
     </div>

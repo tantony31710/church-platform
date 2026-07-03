@@ -92,5 +92,10 @@ service cloud.firestore {
       // a bug to fix immediately.
       allow write: if false;
     }
+
+    // ---- model_benchmarks -------------------------------------------
+    match /model_benchmarks/{benchmarkId} {
+      allow read, write: if isAdmin();
+    }
   }
 }
