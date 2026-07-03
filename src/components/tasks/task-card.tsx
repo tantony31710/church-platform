@@ -24,13 +24,32 @@ export function TaskCard({ task, onVolunteer, isSubmitting }: TaskCardProps) {
       >
         <Card className="p-5 flex flex-col justify-between h-full transition-colors duration-300 group-hover:border-glow/40 group-hover:shadow-[0_0_30px_hsl(var(--glow)/0.12)]">
           <div>
-            <h3 className="font-medium text-base text-foreground">{task.title}</h3>
+            <div className="flex justify-between items-start">
+              <h3 className="font-medium text-base text-foreground">{task.title}</h3>
+              {task.priority && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    task.priority === 'urgent' ? 'bg-red-500/20 text-red-400' :
+                    task.priority === 'high' ? 'bg-amber-500/20 text-amber-400' :
+                    'bg-slate-500/20 text-slate-400'
+                }`}>
+                    {task.priority.toUpperCase()}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-foreground/60 mt-1 leading-relaxed">{task.description}</p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4 text-xs text-foreground/45">
               <span className="px-2 py-0.5 rounded-full bg-white/5 border border-border">{task.requiredSkill}</span>
+              {task.tags?.map(tag => (
+                  <span key={tag} className="px-2 py-0.5 rounded-full bg-white/5 border border-border">{tag}</span>
+              ))}
               <span>{task.deadline.toDate().toLocaleDateString()}</span>
               <span className="text-glow font-medium">{task.pointsValue} pts</span>
             </div>
+            {task.subtasks && task.subtasks.length > 0 && (
+                <div className="mt-3 text-xs text-foreground/60">
+                    {task.subtasks.filter(s => s.completed).length} / {task.subtasks.length} subtasks completed
+                </div>
+            )}
           </div>
           <Button className="mt-5 w-full" onClick={() => onVolunteer(task.id)} disabled={isSubmitting}>
             {isSubmitting ? (

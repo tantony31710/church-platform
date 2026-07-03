@@ -3,6 +3,8 @@ import { initializeApp } from 'firebase-admin/app';
 initializeApp();
 
 export { onTaskCompleted } from './onTaskCompleted';
+export { onTaskRecurrence } from './onTaskRecurrence';
+export { onTaskDependencyCheck } from './onTaskDependencyCheck';
 export { onAttendanceMarked } from './onAttendanceMarked';
 export { onModelBenchmarking } from './onModelBenchmarking';
 export { onAsyncIngestion } from './onAsyncIngestion';

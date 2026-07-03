@@ -47,19 +47,38 @@ tasks/{taskId}
 ├── pointsValue: number (points awarded on completion)
 ├── createdAt: Timestamp
 ├── completedAt: Timestamp (optional)
-└── createdBy: string (uid of admin who created task)
+├── createdBy: string (uid of admin who created task)
+├── priority: 'low' | 'medium' | 'high' | 'urgent' (NEW)
+├── tags: string[] (NEW)
+├── subtasks: {id: string, title: string, completed: boolean}[] (NEW)
+├── attachments: string[] (array of URLs) (NEW)
+├── estimatedTime: number (in minutes) (NEW)
+├── actualTime: number (in minutes) (NEW)
+├── dependsOn: string[] (array of taskIds) (NEW)
+├── recurrence: string | null (cron expression or frequency) (NEW)
+└── customFields: object (key-value pairs) (NEW)
 ```
+
+**New sub-collection:**
+`tasks/{taskId}/comments/{commentId}`
+├── userId: string
+├── content: string
+└── createdAt: Timestamp
 
 **Indexes:**
 - `status` (for filtering open/assigned/completed)
 - `assignedTo` (for user's task list)
 - `deadline` (for sorting by due date)
+- `priority` (for sorting by importance)
+- `tags` (for filtering)
 
 **Security Rules:**
 - All signed-in users can read tasks
 - Only admins can create/delete tasks
 - Volunteers can claim an OPEN task for themselves (self-assignment only)
 - Only admins can mark tasks as completed
+- Users can add comments to tasks they can read
+- Only comment authors or admins can delete comments
 
 ---
 

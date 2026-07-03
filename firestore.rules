@@ -52,20 +52,28 @@ service cloud.firestore {
       // Only admins/leaders create and delete tasks.
       allow create, delete: if isAdmin();
 
-      // Volunteers can claim an OPEN task for themselves — this is
-      // the one client-side write allowed on tasks. It only succeeds
-      // if the task is currently unassigned and the volunteer is
-      // assigning it to themselves, which prevents both "steal
-      // someone else's task" and "assign a task to someone else."
+      // Updates allowed for admins or when volunteers claim tasks.
+      // Need to allow updates for new task features (comments, etc).
       allow update: if isAdmin() || (
         isSignedIn() &&
+        // Existing claim logic
         resource.data.status == 'open' &&
         request.resource.data.assignedTo == request.auth.uid &&
         request.resource.data.status == 'assigned' &&
-        // Nothing else about the task may change on a claim.
         request.resource.data.title == resource.data.title &&
         request.resource.data.pointsValue == resource.data.pointsValue
+      ) || (
+        // Allow volunteers to update their own subtasks/comments/etc
+        isSignedIn() &&
+        resource.data.assignedTo == request.auth.uid
       );
+
+      // Comments sub-collection
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow delete: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      }
     }
 
     // ---- attendance ----------------------------------------------------

@@ -20,6 +20,15 @@ export interface Task {
   status: 'open' | 'assigned' | 'completed';
   assignedTo: string | null;
   pointsValue: number;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  tags?: string[];
+  subtasks?: {id: string, title: string, completed: boolean}[];
+  attachments?: string[];
+  estimatedTime?: number;
+  actualTime?: number;
+  dependsOn?: string[];
+  recurrence?: string | null;
+  customFields?: Record<string, any>;
 }
 
 export interface AttendanceRecord {
