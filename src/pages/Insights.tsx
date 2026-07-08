@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { AttendanceChart, AttendancePoint } from '@/components/insights/attendance-chart';
-import { FeatureImportance } from '@/components/insights/feature-importance';
-import { DataDriftMonitor } from '@/components/insights/data-drift-monitor';
-import { EmbeddingClusters } from '@/components/insights/embedding-clusters';
-import { TimeSeriesDecomposition } from '@/components/insights/time-series-decomposition';
-import { CorrelationNetwork } from '@/components/insights/correlation-network';
+import { AttendanceChart, AttendancePoint } from '@/modules/insights/attendance-chart';
+import { FeatureImportance } from '@/modules/insights/feature-importance';
+import { DataDriftMonitor } from '@/modules/insights/data-drift-monitor';
+import { EmbeddingClusters } from '@/modules/insights/embedding-clusters';
+import { TimeSeriesDecomposition } from '@/modules/insights/time-series-decomposition';
+import { CorrelationNetwork } from '@/modules/insights/correlation-network';
 import { Users, CheckCircle, TrendingUp, Award } from 'lucide-react';
 
 export default function InsightsPage() {

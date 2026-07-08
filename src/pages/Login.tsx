@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
-import { Button, Card } from '@/components/ui/button';
-import { TiltCard } from '@/components/ui/tilt-card';
+import { Button, Card } from '@/modules/ui/button';
+import { TiltCard } from '@/modules/ui/tilt-card';
 import { User, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {

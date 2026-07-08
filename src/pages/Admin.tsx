@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { TaskForm } from '@/components/admin/task-form';
-import { TaskManager } from '@/components/admin/task-manager';
-import { VolunteerManager } from '@/components/admin/volunteer-manager';
+import { TaskForm } from '@/modules/admin/task-form';
+import { TaskManager } from '@/modules/admin/task-manager';
+import { VolunteerManager } from '@/modules/admin/volunteer-manager';
 import { Database, Cpu, Activity, Megaphone } from 'lucide-react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';

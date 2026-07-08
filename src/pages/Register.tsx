@@ -4,8 +4,8 @@ import { motion } from 'framer-motion';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/client';
-import { Button, Card } from '@/components/ui/button';
-import { TiltCard } from '@/components/ui/tilt-card';
+import { Button, Card } from '@/modules/ui/button';
+import { TiltCard } from '@/modules/ui/tilt-card';
 import { UserPlus, Check } from 'lucide-react';
 
 const COMMON_SKILLS = [

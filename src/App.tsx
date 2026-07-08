@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/lib/toast-context';
-import { AmbientBackground } from '@/components/ui/ambient-background';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+import { AmbientBackground } from '@/modules/ui/ambient-background';
+import DashboardLayout from '@/modules/layout/DashboardLayout';
 import LoginPage from '@/pages/Login';
 import RegisterPage from '@/pages/Register';
 import TasksPage from '@/pages/Tasks';

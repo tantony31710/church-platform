@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { onSnapshot, collection, query, orderBy, limit as fbLimit } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { Card, Button } from '@/components/ui/button';
-import { LeaderboardRowSkeleton } from '@/components/ui/skeleton';
+import { Card, Button } from '@/modules/ui/button';
+import { LeaderboardRowSkeleton } from '@/modules/ui/skeleton';
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query';
 import type { LeaderboardEntry } from '@/lib/types';
 

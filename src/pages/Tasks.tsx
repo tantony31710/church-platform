@@ -4,7 +4,7 @@ import { useUserProfile } from '@/lib/hooks/use-user-profile';
 import { motion } from 'framer-motion';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { AnnouncementBanner } from '@/components/ui/announcement-banner';
+import { AnnouncementBanner } from '@/modules/ui/announcement-banner';
 
 // React.lazy + Suspense is Vite's equivalent of Next's
 // next/dynamic(..., { ssr: false }) — except there's no ssr:false
