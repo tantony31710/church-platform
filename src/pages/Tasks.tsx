@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { TaskList } from '@/components/tasks/task-list';
+import { TaskList } from '@/modules/tasks/task-list';
 import { useUserProfile } from '@/lib/hooks/use-user-profile';
 import { motion } from 'framer-motion';
 import { doc, onSnapshot } from 'firebase/firestore';

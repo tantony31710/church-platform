@@ -1,5 +1,5 @@
 import { useAuth } from '@/lib/auth-context';
-import { QrGenerator } from '@/components/attendance/qr-generator';
+import { QrGenerator } from '@/modules/attendance/qr-generator';
 
 const TODAYS_EVENT_ID = 'sunday-service-current';
 
