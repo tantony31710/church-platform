@@ -44,3 +44,11 @@ export interface LeaderboardEntry {
   points: number;
   rank: number;
 }
+
+export interface DataLineage {
+  id: string;
+  source: string;
+  timestamp: Timestamp;
+  status: 'success' | 'failure';
+  details?: string;
+}

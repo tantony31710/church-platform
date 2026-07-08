@@ -17,6 +17,12 @@ direct fit than Next.js was — no server-side prerendering, no
   separate deploy target, unaffected by the Next.js → Vite switch)
 - `firestore.rules` / `firestore.indexes.json` — unchanged from before
 
+## Recent Architectural Improvements
+
+- **AI/Data Pipeline:** Implemented data lineage tracking in Cloud Functions for auditability.
+- **UX/Accessibility:** Enhanced `InteractionHub` with ARIA roles/labels for WCAG compliance.
+- **Security:** Hardened Firestore security rules with strict Role-Based Access Control (RBAC).
+
 ## Setup
 
 1. `npm install`, then `cd functions && npm install`

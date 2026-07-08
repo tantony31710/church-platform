@@ -118,7 +118,11 @@ export function InteractionHub({ volunteerCount = 16 }: { volunteerCount?: numbe
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   return (
-    <div className="relative h-72 w-full rounded-lg overflow-hidden glass glow-ring">
+    <div 
+      className="relative h-72 w-full rounded-lg overflow-hidden glass glow-ring"
+      role="img"
+      aria-label="Interactive visualization of the volunteer community network"
+    >
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-glow/5 via-transparent to-accent/5" />
       <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
         <ambientLight intensity={0.4} />
