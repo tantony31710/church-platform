@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/button';
+import { Card } from '@/modules/ui/button';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 
 export const StreamingMonitor: React.FC = () => {

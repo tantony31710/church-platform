@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card } from '@/components/ui/button';
-import { Button } from '@/components/ui/button';
+import { Card } from '@/modules/ui/button';
+import { Button } from '@/modules/ui/button';
 
 export const SyntheticDataGenerator: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);

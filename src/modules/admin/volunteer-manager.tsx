@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { collection, onSnapshot, orderBy, query, doc, updateDoc } from 'firebase/firestore';
 import { ShieldCheck, Shield } from 'lucide-react';
 import { db } from '@/lib/firebase/client';
-import { Card } from '@/components/ui/button';
+import { Card } from '@/modules/ui/button';
 import type { UserProfile } from '@/lib/types';
 
 // Role promotion writes directly to users/{uid}.role. firestore.rules

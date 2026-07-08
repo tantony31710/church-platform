@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/f
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/auth-context';
 import { TaskCard } from './task-card';
-import { TaskCardSkeleton } from '@/components/ui/skeleton';
+import { TaskCardSkeleton } from '@/modules/ui/skeleton';
 import { useToast } from '@/lib/toast-context';
 import type { Task } from '@/lib/types';
 

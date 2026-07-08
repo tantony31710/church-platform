@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
-import { Card, Button } from '@/components/ui/button';
-import { TiltCard } from '@/components/ui/tilt-card';
+import { Card, Button } from '@/modules/ui/button';
+import { TiltCard } from '@/modules/ui/tilt-card';
 import type { Task } from '@/lib/types';
 
 interface TaskCardProps {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { collection, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { CheckCircle2, Trash2, Circle, CircleDot } from 'lucide-react';
 import { db } from '@/lib/firebase/client';
-import { Card, Button } from '@/components/ui/button';
+import { Card, Button } from '@/modules/ui/button';
 import type { Task } from '@/lib/types';
 
 const statusStyles: Record<Task['status'], { label: string; icon: typeof Circle; color: string }> = {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Card } from '@/components/ui/button';
+import { Card } from '@/modules/ui/button';
 
 interface ShapFeature {
   name: string;

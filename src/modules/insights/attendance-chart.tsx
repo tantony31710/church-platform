@@ -1,18 +1,10 @@
-'use client';
-
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-interface AttendancePoint {
+export interface AttendancePoint {
   date: string;
   count: number;
 }
 
-// Admin-only chart, rendered inside app/(dashboard)/insights/page.tsx.
-// Expects pre-aggregated data (one point per day/session) — do NOT
-// pass raw attendance documents here; aggregate them server-side
-// first (see firestore_data_utils.py's pandas groupby pattern, or a
-// Cloud Function that maintains a daily rollup doc) so this chart
-// doesn't need to process thousands of records in the browser.
 export function AttendanceChart({ data }: { data: AttendancePoint[] }) {
   return (
     <div className="h-72 w-full rounded-lg border border-border bg-white/60 backdrop-blur-glass p-4">
