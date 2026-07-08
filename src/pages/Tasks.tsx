@@ -13,7 +13,7 @@ import { AnnouncementBanner } from '@/modules/ui/announcement-banner';
 // "ssr: false not allowed in Server Components" build error we hit
 // under Next.js.
 const InteractionHub = lazy(() =>
-  import('@/components/three/interaction-hub').then((m) => ({ default: m.InteractionHub }))
+  import('@/modules/three/interaction-hub').then((m) => ({ default: m.InteractionHub }))
 );
 
 export default function TasksPage() {
