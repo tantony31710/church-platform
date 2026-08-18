@@ -1,10 +1,10 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { TaskList } from '@/modules/tasks/task-list';
+import { TaskList } from '@/components/tasks/task-list';
 import { useUserProfile } from '@/lib/hooks/use-user-profile';
 import { motion } from 'framer-motion';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
-import { AnnouncementBanner } from '@/modules/ui/announcement-banner';
+import { AnnouncementBanner } from '@/components/ui/announcement-banner';
 
 // React.lazy + Suspense is Vite's equivalent of Next's
 // next/dynamic(..., { ssr: false }) — except there's no ssr:false
@@ -13,7 +13,7 @@ import { AnnouncementBanner } from '@/modules/ui/announcement-banner';
 // "ssr: false not allowed in Server Components" build error we hit
 // under Next.js.
 const InteractionHub = lazy(() =>
-  import('@/modules/three/interaction-hub').then((m) => ({ default: m.InteractionHub }))
+  import('@/components/three/interaction-hub').then((m) => ({ default: m.InteractionHub }))
 );
 
 export default function TasksPage() {
