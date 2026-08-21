@@ -1,0 +1,6 @@
+{
+  "name": "Church Volunteer Platform",
+  "description": "Volunteer matching, attendance, tasks, and points leaderboard for church community.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

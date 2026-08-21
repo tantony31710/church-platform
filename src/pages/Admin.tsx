@@ -3,136 +3,271 @@ import { useAuth } from '@/lib/auth-context';
 import { TaskForm } from '@/components/admin/task-form';
 import { TaskManager } from '@/components/admin/task-manager';
 import { VolunteerManager } from '@/components/admin/volunteer-manager';
-import { Database, Cpu, Activity, Megaphone } from 'lucide-react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/client';
+import { DataService } from '@/lib/data-service';
+import { useToast } from '@/lib/toast-context';
+import { Button, Card } from '@/components/ui/button';
+import {
+  ShieldCheck,
+  ListTodo,
+  Users,
+  Megaphone,
+  Database,
+  Sparkles,
+  RotateCcw,
+  Download,
+  AlertTriangle,
+  Radio
+} from 'lucide-react';
 
-type Tab = 'tasks' | 'volunteers' | 'data-ai';
+type Tab = 'tasks' | 'volunteers' | 'announcements' | 'data-tools';
 
 export default function AdminPage() {
-  const { role } = useAuth();
+  const { role, profile, toggleRole } = useAuth();
+  const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>('tasks');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [announcement, setAnnouncement] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [announcementMsg, setAnnouncementMsg] = useState('');
+  const [announcementPriority, setAnnouncementPriority] = useState<'normal' | 'urgent' | 'announcement'>('urgent');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
-    const fetchAnnouncement = async () => {
-      const snap = await getDoc(doc(db, 'config', 'announcements'));
-      if (snap.exists()) {
-        setAnnouncement(snap.data().message || '');
-      }
-    };
-    fetchAnnouncement();
+    const current = DataService.getAnnouncement();
+    if (current) {
+      setAnnouncementMsg(current.message || '');
+      setAnnouncementPriority(current.priority || 'urgent');
+    }
   }, []);
 
-  const saveAnnouncement = async () => {
-    setIsSaving(true);
+  const handleSaveAnnouncement = () => {
+    DataService.saveAnnouncement(announcementMsg, announcementPriority, profile?.name || 'Pastor David');
+    showToast(announcementMsg.trim() ? 'Global announcement broadcasted!' : 'Announcement cleared.');
+  };
+
+  const handleGenerateSynthetic = () => {
+    setIsGenerating(true);
     try {
-      await setDoc(doc(db, 'config', 'announcements'), { 
-        message: announcement, 
-        updatedAt: new Date() 
-      });
-    } catch (e) {
-      console.error(e);
+      const res = DataService.generateSyntheticDataset(3);
+      showToast(`✨ Generated ${res.volunteersCreated} volunteers & ${res.tasksCreated} ministry tasks!`);
     } finally {
-      setIsSaving(false);
+      setIsGenerating(false);
     }
   };
 
+  const handleResetData = () => {
+    if (window.confirm('Reset all demo data to default clean church seed state?')) {
+      DataService.resetToDefaultData();
+      showToast('Database reset to defaults.');
+      window.location.reload();
+    }
+  };
+
+  // If user is currently in volunteer mode, offer quick 1-click elevation
   if (role !== 'admin') {
-    return <p className="text-sm text-foreground/50">This page is only available to church leaders.</p>;
+    return (
+      <div className="max-w-xl mx-auto p-8 rounded-2xl glass-strong border border-border text-center flex flex-col items-center gap-4">
+        <div className="h-12 w-12 rounded-full bg-purple-500/20 text-purple-300 flex items-center justify-center">
+          <ShieldCheck className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-bold text-foreground">Leadership Permissions Required</h2>
+        <p className="text-xs text-foreground/60 max-w-sm">
+          You are currently signed in as a standard volunteer (<strong className="text-foreground">{profile?.name}</strong>). Switch your role to test Pastoral & Admin controls.
+        </p>
+        <Button variant="default" onClick={toggleRole}>
+          Elevate to Admin / Leader
+        </Button>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-5xl mx-auto flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-medium text-foreground">Admin</h1>
-        <p className="text-sm text-foreground/50">Create tasks and manage volunteers.</p>
-      </div>
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+                PASTORAL & ADMIN CONSOLE
+              </span>
+              <span className="text-xs text-foreground/50">Ministry Operations & Task Coordination</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Church Administration Center
+            </h1>
+          </div>
 
-      <div className="flex gap-1 w-fit p-1 rounded-lg glass">
-        {(['tasks', 'volunteers', 'data-ai'] as Tab[]).map((t) => (
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-3 py-1.5 rounded-xl bg-white/5 border border-border text-foreground/70">
+              Logged in: <strong className="text-foreground">{profile?.name}</strong>
+            </span>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex p-1 rounded-xl glass border border-border self-start mt-6 flex-wrap">
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
-              tab === t ? 'bg-white/10 text-foreground' : 'text-foreground/50 hover:text-foreground'
+            onClick={() => setTab('tasks')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'tasks' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
             }`}
           >
-            {t.replace('-', ' ')}
+            <ListTodo className="h-3.5 w-3.5" />
+            <span>Ministry Tasks & Assignments</span>
           </button>
-        ))}
+
+          <button
+            onClick={() => setTab('volunteers')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'volunteers' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+            }`}
+          >
+            <Users className="h-3.5 w-3.5" />
+            <span>Volunteer Roster & Permissions</span>
+          </button>
+
+          <button
+            onClick={() => setTab('announcements')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'announcements' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+            }`}
+          >
+            <Megaphone className="h-3.5 w-3.5" />
+            <span>Global Announcements</span>
+          </button>
+
+          <button
+            onClick={() => setTab('data-tools')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'data-tools' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+            }`}
+          >
+            <Database className="h-3.5 w-3.5" />
+            <span>Data Operations & Sandbox</span>
+          </button>
+        </div>
       </div>
 
-      {tab === 'tasks' ? (
-        <div className="grid gap-6 md:grid-cols-[320px_1fr] items-start">
-          <div className="flex flex-col gap-6">
-            <TaskForm onCreated={() => setRefreshKey((k) => k + 1)} />
-            
-            <div className="glass-strong glow-ring p-5 rounded-xl flex flex-col gap-4">
-              <div className="flex items-center gap-2 text-glow">
-                <Megaphone className="h-4 w-4" />
-                <h2 className="text-sm font-medium">Global Announcement</h2>
-              </div>
-              <textarea
-                value={announcement}
-                onChange={(e) => setAnnouncement(e.target.value)}
-                placeholder="Enter urgent message for volunteers..."
-                className="h-24 rounded-md border border-border bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-glow/50 transition-colors resize-none"
-              />
-              <button 
-                onClick={saveAnnouncement}
-                disabled={isSaving}
-                className="w-full py-2 rounded-md bg-glow/20 text-glow border border-glow/30 text-xs font-medium hover:bg-glow/30 transition-colors"
-              >
-                {isSaving ? 'Saving...' : 'Publish to Tasks Page'}
-              </button>
-            </div>
+      {/* Tab 1: Tasks */}
+      {tab === 'tasks' && (
+        <div className="grid gap-6 lg:grid-cols-12 items-start">
+          <div className="lg:col-span-5">
+            <TaskForm />
           </div>
-          <TaskManager key={refreshKey} />
+          <div className="lg:col-span-7 glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
+            <h2 className="text-sm font-bold text-foreground mb-1">Live Ministry Task Directory</h2>
+            <p className="text-xs text-foreground/50 mb-4">Review all pending, assigned, and completed needs</p>
+            <TaskManager />
+          </div>
         </div>
-      ) : tab === 'volunteers' ? (
-        <VolunteerManager />
-      ) : (
+      )}
+
+      {/* Tab 2: Volunteers */}
+      {tab === 'volunteers' && (
+        <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
+          <VolunteerManager />
+        </div>
+      )}
+
+      {/* Tab 3: Announcements */}
+      {tab === 'announcements' && (
+        <div className="max-w-2xl mx-auto glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
+          <div className="flex items-center gap-2 text-glow mb-2">
+            <Megaphone className="h-5 w-5" />
+            <h2 className="text-base font-bold text-foreground">Global Church Announcement Banner</h2>
+          </div>
+          <p className="text-xs text-foreground/50 mb-4">
+            This banner displays on every volunteer's dashboard immediately when published.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-[11px] font-semibold text-foreground/70 uppercase block mb-1">
+                Announcement Message
+              </label>
+              <textarea
+                value={announcementMsg}
+                onChange={(e) => setAnnouncementMsg(e.target.value)}
+                placeholder="e.g. 🔔 Welcome to Sunday service! Sound board & Hospitality check-in now open..."
+                rows={4}
+                className="w-full rounded-xl border border-border bg-white/5 p-3 text-xs text-foreground placeholder:text-foreground/30 focus:outline-none focus:border-glow/50 resize-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-foreground/70 font-medium">Priority Level:</label>
+              <select
+                value={announcementPriority}
+                onChange={(e) => setAnnouncementPriority(e.target.value as any)}
+                className="h-8 rounded-lg border border-border bg-card-bg px-2 text-xs text-foreground focus:outline-none focus:border-glow/50"
+              >
+                <option value="urgent" className="bg-background">Urgent (Glowing Alert)</option>
+                <option value="normal" className="bg-background">Normal Notice</option>
+                <option value="announcement" className="bg-background">General Info</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleSaveAnnouncement} className="font-bold">
+                Publish Announcement
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAnnouncementMsg('');
+                  DataService.saveAnnouncement('', 'normal');
+                  showToast('Announcement cleared.');
+                }}
+              >
+                Clear Banner
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Data Operations & Sandbox */}
+      {tab === 'data-tools' && (
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="glass-strong glow-ring p-6 rounded-xl flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-glow">
-              <Database className="h-5 w-5" />
-              <h2 className="font-medium">Data Analysis Pipeline</h2>
-            </div>
-            <p className="text-sm text-foreground/60">
-              Activate the Python-based analytics engine to process volunteer performance, 
-              segmentation, and engagement metrics.
-            </p>
-            <button className="px-4 py-2 rounded-md bg-glow/20 text-glow border border-glow/30 text-sm font-medium hover:bg-glow/30 transition-colors">
-              Run Analytics Sync
-            </button>
-          </div>
-          <div className="glass-strong glow-ring p-6 rounded-xl flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-glow">
-              <Cpu className="h-5 w-5" />
-              <h2 className="font-medium">AI Task Matcher</h2>
-            </div>
-            <p className="text-sm text-foreground/60">
-              Enable the Claude-powered recommendation engine to automatically match 
-              tasks to volunteers based on skill embeddings and history.
-            </p>
-            <button className="px-4 py-2 rounded-md bg-glow/20 text-glow border border-glow/30 text-sm font-medium hover:bg-glow/30 transition-colors">
-              Rebuild AI Index
-            </button>
-          </div>
-          <div className="glass-strong glow-ring p-6 rounded-xl col-span-full flex items-center justify-between">
-            <div className="flex items-center gap-3 text-foreground">
-              <Activity className="h-5 w-5 text-glow" />
-              <div>
-                <h2 className="font-medium">System Health</h2>
-                <p className="text-xs text-foreground/50">All Firestore triggers and Cloud Functions operational.</p>
+          {/* Synthetic Data Generator */}
+          <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-glow mb-2">
+                <Sparkles className="h-5 w-5" />
+                <h2 className="text-base font-bold text-foreground">Synthetic Volunteer Data Generator</h2>
               </div>
+              <p className="text-xs text-foreground/60 leading-relaxed mb-4">
+                Instantly populate your community database with realistic volunteers, diverse department giftings, and active Sunday assignments to test matchmaking and charts.
+              </p>
             </div>
-            <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
-              Live
-            </span>
+
+            <Button
+              variant="glow"
+              onClick={handleGenerateSynthetic}
+              disabled={isGenerating}
+              className="w-full font-bold"
+            >
+              {isGenerating ? 'Generating...' : 'Generate 3 Volunteers + 3 Tasks'}
+            </Button>
+          </div>
+
+          {/* Database Reset */}
+          <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-amber-400 mb-2">
+                <RotateCcw className="h-5 w-5" />
+                <h2 className="text-base font-bold text-foreground">Reset Demo Environment</h2>
+              </div>
+              <p className="text-xs text-foreground/60 leading-relaxed mb-4">
+                Revert all tasks, volunteers, attendance records, and active pins to the original clean community seed dataset.
+              </p>
+            </div>
+
+            <Button
+              variant="danger"
+              onClick={handleResetData}
+              className="w-full font-bold"
+            >
+              Reset to Clean Defaults
+            </Button>
           </div>
         </div>
       )}
