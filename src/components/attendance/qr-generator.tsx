@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { DataService } from '@/lib/data-service';
-import { ActiveSession, AttendanceRecord } from '@/lib/types';
+import { ActiveSession, AttendanceRecord, UserProfile } from '@/lib/types';
 import {
   QrCode,
   KeyRound,
@@ -23,6 +23,7 @@ export function QrGenerator() {
   const { showToast } = useToast();
   const [session, setSession] = useState<ActiveSession>(() => DataService.getActiveSession());
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => DataService.getAttendance());
+  const [users, setUsers] = useState<UserProfile[]>(() => DataService.getUsers());
   const [manualSearch, setManualSearch] = useState('');
   const [timeLeft, setTimeLeft] = useState(30);
 
@@ -34,6 +35,12 @@ export function QrGenerator() {
     const unsubAttendance = DataService.subscribe<AttendanceRecord[]>('attendance', (records) => {
       setAttendance(records);
     });
+    const unsubUsers = DataService.subscribe<UserProfile[]>('users', (nextUsers) => {
+      setUsers(nextUsers);
+    });
+
+    // Publish a fresh live session when the administrator opens the broadcast.
+    DataService.rotateActiveSessionToken();
 
     // 30-second token rotation
     const interval = setInterval(() => {
@@ -49,6 +56,7 @@ export function QrGenerator() {
     return () => {
       unsubSession();
       unsubAttendance();
+      unsubUsers();
       clearInterval(interval);
     };
   }, []);
@@ -64,7 +72,7 @@ export function QrGenerator() {
     if (res.alreadyCheckedIn) {
       showToast(`${user.name} is already checked in today.`, 'info');
     } else {
-      showToast(`Checked in ${user.name}! (+${res.pointsAwarded} pts)`);
+      showToast(`Checked in ${user.name}; attendance telemetry saved (0 points).`);
     }
     setManualSearch('');
   };
@@ -89,7 +97,7 @@ export function QrGenerator() {
     showToast('Attendance CSV exported!');
   };
 
-  const allUsers = DataService.getUsers();
+  const allUsers = users;
   const searchResults = manualSearch.trim()
     ? allUsers.filter(
         (u) =>
