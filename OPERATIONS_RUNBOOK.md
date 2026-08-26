@@ -421,3 +421,67 @@ $env:TEST_FIREBASE_EMAIL = "rag-test@example.com"
 $env:TEST_FIREBASE_PASSWORD = "DEDICATED_TEST_PASSWORD"
 py -3.13 .\scripts\test_rag_local.py "What is the volunteer check-in process?"
 ```
+
+## 16. Inspect Vercel deployments and environment configuration
+
+The Vercel dashboard is the safest place to inspect environment values without printing secrets. Open the project, go to **Settings → Environment Variables**, select **Production**, and confirm the public build variables `VITE_FIREBASE_PROJECT_ID`, `VITE_ADMIN_EMAILS`, and the remaining `VITE_FIREBASE_*` entries. Do not expose or copy server-only secrets into browser code.
+
+From PowerShell, the Vercel CLI can inspect deployment status and logs after installing or using it through `npx`:
+
+```powershell
+Set-Location "C:\Users\LAP ME\Documents\Programming\Anton projects\church-platform"
+npx vercel login
+npx vercel link
+npx vercel project ls
+npx vercel ls
+npx vercel inspect YOUR_DEPLOYMENT_URL --logs
+```
+
+Use the Vercel dashboard’s **Deployments → deployment → Building/Runtime Logs** view for the clearest result. Confirm that the deployment commit is the latest GitHub commit, that the build completed successfully, and that the Production environment was used. Vercel does not display secret values in logs; if a key is accidentally printed by application code, rotate it immediately.
+
+To force a fresh production deployment from the linked repository:
+
+```powershell
+npx vercel --prod
+```
+
+The static frontend build can expose only `VITE_*` values. The Express/Python server’s `ADMIN_EMAILS`, `FIREBASE_SERVICE_ACCOUNT`, and `GEMINI_API_KEY` belong to the Cloud Run revision, not the Vercel browser build, unless the API is separately hosted by Vercel.
+
+## 17. Read-only admin consistency check from PowerShell
+
+Run the new wrapper from the project root:
+
+```powershell
+.\scripts\Test-AdminConsistency.ps1
+```
+
+For another approved administrator:
+
+```powershell
+.\scripts\Test-AdminConsistency.ps1 `
+  -Email "second-admin@example.com" `
+  -ServiceAccountPath ".\serviceAccountKey.json"
+```
+
+The check compares the Firebase Auth email and UID, email verification state, custom `{ "admin": true }` claim, and `users/<Auth UID>.role`. It exits with code 0 only when all checks pass. It never writes to Firebase. If PowerShell blocks local scripts for the current session, use:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\Test-AdminConsistency.ps1
+```
+
+## 18. Administrator redirect source files
+
+The administrator redirect and role resolution are intentionally split across a few small files:
+
+| File | Responsibility |
+|---|---|
+| `src/pages/Login.tsx` | Administrator/Volunteer tabs, email allowlist gate, Firebase password sign-in, forced claim refresh, and `/admin` versus `/tasks` navigation |
+| `src/lib/auth-context.tsx` | Firebase session listener, Firestore profile lookup, custom claim verification, email allowlist check, and final `role` calculation |
+| `src/pages/Admin.tsx` | Route-level guard; non-admin sessions are redirected to `/tasks` |
+| `src/components/layout/DashboardLayout.tsx` | Authenticated-shell guard and visibility of the Admin Hub navigation item |
+| `src/lib/firebase/client.ts` | Public Firebase browser configuration and initialization |
+| `admin_bootstrap.py` | Trusted promotion, custom claim assignment, Firestore role synchronization, and admin allowlist enforcement |
+| `firestore.rules` | Server-enforced claim/profile checks and protected role/points writes |
+
+The role is considered administrator only when the email is approved, verified, has the custom claim, and has the Firestore role. A Firestore `role: admin` field by itself is deliberately insufficient.
