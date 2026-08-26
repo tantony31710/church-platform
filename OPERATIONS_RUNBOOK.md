@@ -337,3 +337,87 @@ py -3.13 scripts/verify_points.py \
 ```
 
 The script is read-only. It prints the task status, assignee, task point value, volunteer points, and completed-task count, then exits successfully only when the task is completed, assigned to the requested UID, and the optional expected totals match. It does not award or modify points.
+
+## 14. Optional multi-admin configuration
+
+The default configuration remains single-admin when only one email is listed. To approve more than one administrator, use a comma-separated allowlist in both the public frontend build configuration and the private server runtime configuration:
+
+```dotenv
+VITE_ADMIN_EMAILS=first-admin@example.com,second-admin@example.com
+ADMIN_EMAILS=first-admin@example.com,second-admin@example.com
+```
+
+Do not rely on an email list inside Firestore Rules. Firestore Rules cannot read Cloud Run environment variables. Instead, each approved account must have a Firebase custom claim `{ "admin": true }` and a matching `users/<AUTH_UID>` document with `role: "admin"`. The rules continue to authorize the claim/profile combination, while the frontend and Express API additionally require the email to be in their respective allowlists.
+
+Create each Firebase Auth account first, verify its email, ensure its profile document uses the exact Firebase Auth UID, and run the bootstrap command once per approved account:
+
+```powershell
+$env:ADMIN_EMAILS = "first-admin@example.com,second-admin@example.com"
+$env:FIREBASE_SERVICE_ACCOUNT_PATH = "$PWD\serviceAccountKey.json"
+py -3.13 .\admin_bootstrap.py --email "first-admin@example.com" --promote
+py -3.13 .\admin_bootstrap.py --email "second-admin@example.com" --promote
+py -3.13 .\admin_bootstrap.py --list
+```
+
+Promotion is refused for emails not in `ADMIN_EMAILS`. Existing admin records outside the allowlist and stale `admin` claims are demoted/cleared. Set the same list in Vercel as `VITE_ADMIN_EMAILS` and redeploy the frontend. Set `ADMIN_EMAILS` on Cloud Run and create a new revision. Keep `ADMIN_EMAIL` and `VITE_ADMIN_EMAIL` as one-email fallbacks during migration, but do not configure conflicting singular and plural values.
+
+## 15. Cloud Run log troubleshooting
+
+Get the service URL and recent revision list:
+
+```powershell
+gcloud config set project church-platform-36107
+gcloud run services describe churchconnect-api --region us-central1 --format="value(status.url)"
+gcloud run revisions list --service churchconnect-api --region us-central1
+```
+
+Read recent application logs:
+
+```powershell
+gcloud run services logs read churchconnect-api `
+  --region us-central1 `
+  --limit 100 `
+  --format="table(timestamp,severity,textPayload)"
+```
+
+Stream logs while reproducing an API request:
+
+```powershell
+gcloud beta run services logs tail churchconnect-api --region us-central1
+```
+
+Filter for Express authentication, Python subprocess failures, Gemini calls, or startup failures:
+
+```powershell
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="churchconnect-api" AND (textPayload:"API auth" OR textPayload:"Python" OR textPayload:"Gemini" OR severity>=ERROR)' `
+  --project church-platform-36107 `
+  --limit 100 `
+  --format="table(timestamp,severity,textPayload)"
+```
+
+Check the Cloud Run revision environment contract without printing secret values:
+
+```powershell
+gcloud run services describe churchconnect-api `
+  --region us-central1 `
+  --format="yaml(status.url,spec.template.spec.containers[0].env,spec.template.spec.containers[0].envFrom,status.conditions)"
+```
+
+The expected health response is:
+
+```powershell
+$API_URL = gcloud run services describe churchconnect-api --region us-central1 --format="value(status.url)"
+Invoke-RestMethod "$API_URL/api/health" | ConvertTo-Json
+```
+
+It should report `pythonReady: true`, `apiAuthRequired: true`, `adminConfigured: true`, and `geminiConfigured: true`. If `pythonReady` is true but RAG returns a 500, inspect `Python RAG error` and `Python engine returned invalid JSON` messages. If the server returns 401, inspect the browser’s Firebase ID token flow. If it returns 503, inspect whether the Cloud Run revision has the Firebase Admin credentials and `ADMIN_EMAILS` secret. If the response is 200 but `geminiConfigured` is false, create a new Cloud Run revision after correcting the Secret Manager binding.
+
+For a direct authenticated request, use the local Python smoke-test client with `API_BASE_URL` set to the Cloud Run URL. Never put the Gemini key or Firebase service-account JSON in the request body or browser variables:
+
+```powershell
+$env:API_BASE_URL = $API_URL
+$env:VITE_FIREBASE_API_KEY = "YOUR_FIREBASE_WEB_API_KEY"
+$env:TEST_FIREBASE_EMAIL = "rag-test@example.com"
+$env:TEST_FIREBASE_PASSWORD = "DEDICATED_TEST_PASSWORD"
+py -3.13 .\scripts\test_rag_local.py "What is the volunteer check-in process?"
+```

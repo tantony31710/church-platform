@@ -90,20 +90,21 @@ def find_user_by_email(db, email):
     return auth_user.uid, profile.to_dict() or {}
 
 
-def designated_admin_email():
-    value = os.environ.get("ADMIN_EMAIL", "").strip().lower()
-    if not value:
-        print("❌ ADMIN_EMAIL must be set before changing admin access")
-        return None
-    return value
+def designated_admin_emails():
+    value = os.environ.get("ADMIN_EMAILS", os.environ.get("ADMIN_EMAIL", ""))
+    emails = [item.strip().lower() for item in value.split(",") if item.strip()]
+    if not emails:
+        print("❌ ADMIN_EMAILS (or legacy ADMIN_EMAIL) must be set before changing admin access")
+        return []
+    return emails
 
 
 def promote_to_admin(db, email):
-    """Promote only the configured administrator email and set its custom claim."""
-    designated = designated_admin_email()
+    """Promote an approved email and set its custom admin claim."""
+    designated = designated_admin_emails()
     normalized_email = email.strip().lower()
-    if not designated or normalized_email != designated:
-        print("❌ Refusing promotion: the email must exactly match ADMIN_EMAIL")
+    if not designated or normalized_email not in designated:
+        print("❌ Refusing promotion: the email must appear in ADMIN_EMAILS")
         return False
 
     uid, user_data = find_user_by_email(db, normalized_email)
@@ -117,8 +118,16 @@ def promote_to_admin(db, email):
 
     try:
         batch = db.batch()
+        approved_uids = {uid}
+        for approved_email in designated:
+            try:
+                approved_auth_user = firebase_auth.get_user_by_email(approved_email)
+                approved_uids.add(approved_auth_user.uid)
+            except firebase_auth.UserNotFoundError:
+                print(f"ℹ️  Approved admin email has no Auth account yet: {approved_email}")
+
         for existing in db.collection("users").stream():
-            if existing.id != uid and existing.to_dict().get("role") == "admin":
+            if existing.to_dict().get("role") == "admin" and existing.id not in approved_uids:
                 batch.update(existing.reference, {"role": "volunteer"})
         batch.update(db.collection("users").document(uid), {"role": "admin"})
         batch.commit()
@@ -128,13 +137,16 @@ def promote_to_admin(db, email):
         target_claims["admin"] = True
         firebase_auth.set_custom_user_claims(uid, target_claims)
         for existing in db.collection("users").stream():
-            if existing.id != uid and existing.to_dict().get("role") == "volunteer":
-                existing_user = firebase_auth.get_user(existing.id)
-                claims = dict(existing_user.custom_claims or {})
-                if claims.get("admin") is True:
-                    claims["admin"] = False
-                    firebase_auth.set_custom_user_claims(existing.id, claims)
-        print(f"✅ Promoted '{email}' to the single designated admin role (UID: {uid})")
+            if existing.id not in approved_uids:
+                try:
+                    existing_user = firebase_auth.get_user(existing.id)
+                    claims = dict(existing_user.custom_claims or {})
+                    if claims.get("admin") is True:
+                        claims["admin"] = False
+                        firebase_auth.set_custom_user_claims(existing.id, claims)
+                except firebase_auth.UserNotFoundError:
+                    pass
+        print(f"✅ Promoted '{email}' to the approved admin role (UID: {uid})")
         return True
     except Exception as e:
         print(f"❌ Failed to promote user: {e}")
@@ -143,10 +155,10 @@ def promote_to_admin(db, email):
 
 def demote_to_volunteer(db, email):
     """Demote a non-designated user and remove its custom admin claim."""
-    designated = designated_admin_email()
+    designated = designated_admin_emails()
     normalized_email = email.strip().lower()
-    if designated and normalized_email == designated:
-        print("❌ Refusing demotion: ADMIN_EMAIL must remain the sole administrator")
+    if normalized_email in designated:
+        print("❌ Refusing demotion: this email is in ADMIN_EMAILS and must remain an administrator")
         return False
 
     uid, user_data = find_user_by_email(db, normalized_email)

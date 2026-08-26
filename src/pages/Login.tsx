@@ -10,7 +10,12 @@ import { useToast } from '@/lib/toast-context';
 
 type LoginMode = 'volunteer' | 'admin';
 
-const designatedAdminEmail = String(import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+const designatedAdminEmails = String(
+  import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ADMIN_EMAIL || '',
+)
+  .split(',')
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean);
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -35,11 +40,12 @@ export default function LoginPage() {
       setError('Firebase is not configured. Add the production Firebase variables before signing in.');
       return;
     }
-    if (mode === 'admin' && (!designatedAdminEmail || normalizedEmail !== designatedAdminEmail)) {
-      setError('This admin sign-in accepts only the church-designated administrator email.');
+    const isConfiguredAdmin = designatedAdminEmails.includes(normalizedEmail);
+    if (mode === 'admin' && !isConfiguredAdmin) {
+      setError('This admin sign-in accepts only a church-approved administrator email.');
       return;
     }
-    if (mode === 'volunteer' && designatedAdminEmail && normalizedEmail === designatedAdminEmail) {
+    if (mode === 'volunteer' && isConfiguredAdmin) {
       setError('Use the Administrator tab for the designated administrator account.');
       return;
     }

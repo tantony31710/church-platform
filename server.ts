@@ -63,11 +63,18 @@ async function requireFirebaseUser(req: AuthenticatedRequest, res: Response, nex
   }
 }
 
+function configuredAdminEmails() {
+  return String(process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 async function requireDesignatedAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const designatedEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const adminEmails = configuredAdminEmails();
   const user = req.firebaseUser;
-  if (!designatedEmail) return res.status(503).json({ error: 'ADMIN_EMAIL is not configured on the server.' });
-  if (!user || user.email?.trim().toLowerCase() !== designatedEmail || user.admin !== true || user.email_verified !== true) {
+  if (!adminEmails.length) return res.status(503).json({ error: 'ADMIN_EMAILS is not configured on the server.' });
+  if (!user || !user.email || !adminEmails.includes(user.email.trim().toLowerCase()) || user.admin !== true || user.email_verified !== true) {
     return res.status(403).json({ error: 'Only the verified designated administrator can access this endpoint.' });
   }
 
@@ -149,7 +156,7 @@ app.get('/api/health', (_req, res) => {
     time: new Date().toISOString(),
     pythonReady: true,
     apiAuthRequired: true,
-    adminConfigured: Boolean(process.env.ADMIN_EMAIL),
+    adminConfigured: configuredAdminEmails().length > 0,
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
   });
 });

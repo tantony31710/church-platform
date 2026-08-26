@@ -27,7 +27,12 @@ const AuthContext = createContext<AuthContextValue>({
   updateCurrentProfile: () => {},
 });
 
-const designatedAdminEmail = String(import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+const designatedAdminEmails = String(
+  import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ADMIN_EMAIL || '',
+)
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 
 function profileFromFirestore(firebaseUser: User, value: Record<string, any>, effectiveRole?: Role): UserProfile {
   return {
@@ -93,9 +98,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('[Auth] Could not verify Firebase claims:', error);
           }
 
-          const isDesignatedAdmin = Boolean(
-            designatedAdminEmail && nextUser.email?.trim().toLowerCase() === designatedAdminEmail
-          );
+            const isDesignatedAdmin = Boolean(
+              nextUser.email && designatedAdminEmails.includes(nextUser.email.trim().toLowerCase())
+            );
           const effectiveRole: Role =
             isDesignatedAdmin && nextUser.emailVerified && hasAdminClaim && snapshot.data().role === 'admin'
               ? 'admin'
