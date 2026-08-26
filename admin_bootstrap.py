@@ -34,42 +34,56 @@ from firebase_admin import credentials, firestore, auth as firebase_auth
 
 
 def init_firebase():
-    """Initialize Firebase Admin SDK using ADC or Service Account Key."""
-    try:
-        # Try initializing with Application Default Credentials (ADC) first
-        # This works if the user has run 'gcloud auth application-default login'
-        firebase_admin.initialize_app()
+    """Initialize Admin SDK for the intended Firebase project.
+
+    Prefer an explicit service-account file when supplied. This prevents a
+    different local ADC account/project from causing an opaque Firestore 403.
+    """
+    if firebase_admin._apps:
         return firestore.client()
-    except ValueError:
-        # firebase_admin.initialize_app() raises ValueError if app already exists
-        return firestore.client()
-    except Exception:
-        # Fallback to service account key file
-        service_account_path = os.environ.get(
-            "FIREBASE_SERVICE_ACCOUNT_PATH", "serviceAccountKey.json"
-        )
-        
+
+    configured_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
+    service_account_path = configured_path or (
+        "serviceAccountKey.json" if os.path.exists("serviceAccountKey.json") else ""
+    )
+    if service_account_path:
         if not os.path.exists(service_account_path):
-            print(f"❌ Error: No ADC found and {service_account_path} not found")
-            print("\nTo fix this, run:")
-            print("  gcloud auth application-default login")
+            print(f"❌ FIREBASE_SERVICE_ACCOUNT_PATH does not exist: {service_account_path}")
             sys.exit(1)
-        
         try:
             cred = credentials.Certificate(service_account_path)
             firebase_admin.initialize_app(cred)
+            print(f"✅ Firebase Admin initialized from {service_account_path}")
             return firestore.client()
         except Exception as e:
-            print(f"❌ Firebase initialization failed: {e}")
+            print(f"❌ Firebase service-account initialization failed: {e}")
+            print("   Confirm the key belongs to the same Firebase project as the Vercel VITE_FIREBASE_PROJECT_ID.")
             sys.exit(1)
+
+    try:
+        firebase_admin.initialize_app()
+        print("✅ Firebase Admin initialized from Application Default Credentials")
+        return firestore.client()
+    except Exception as e:
+        print("❌ No usable Firebase Admin credentials were found.")
+        print("   Use FIREBASE_SERVICE_ACCOUNT_PATH=serviceAccountKey.json or run gcloud auth application-default login.")
+        print(f"   Details: {e}")
+        sys.exit(1)
 
 
 def find_user_by_email(db, email):
-    """Find a user document by email."""
-    users = db.collection("users").where("email", "==", email).stream()
-    for user in users:
-        return user.id, user.to_dict()
-    return None, None
+    """Resolve the Firebase Auth user, then load its same-UID profile."""
+    try:
+        auth_user = firebase_auth.get_user_by_email(email)
+    except firebase_auth.UserNotFoundError:
+        print(f"❌ Firebase Auth account '{email}' does not exist in this project")
+        return None, None
+
+    profile = db.collection("users").document(auth_user.uid).get()
+    if not profile.exists:
+        print(f"❌ Auth account exists, but users/{auth_user.uid} is missing")
+        return None, None
+    return auth_user.uid, profile.to_dict() or {}
 
 
 def designated_admin_email():
@@ -218,12 +232,14 @@ Examples:
         if not args.email:
             print("❌ --email is required with --promote")
             sys.exit(1)
-        promote_to_admin(db, args.email)
+        if not promote_to_admin(db, args.email):
+            sys.exit(1)
     elif args.demote:
         if not args.email:
             print("❌ --email is required with --demote")
             sys.exit(1)
-        demote_to_volunteer(db, args.email)
+        if not demote_to_volunteer(db, args.email):
+            sys.exit(1)
     else:
         parser.print_help()
 

@@ -250,3 +250,20 @@ With all server values present, the response includes `pythonReady: true`, `admi
 To test the feature in the browser, open the local application, sign in with a Firebase Auth account, open **Insights → Python RAG & SOP AI**, ask a question covered by the church knowledge documents, and confirm that the answer includes retrieved-document context. The RAG route uses the signed-in Firebase session automatically. If Gemini is absent, the UI should still show the deterministic local retrieval answer; if the server is not configured, it should show an explicit API error rather than sample output.
 
 For Vercel, add the six `VITE_FIREBASE_*` variables and `VITE_ADMIN_EMAIL` to the project’s Production environment, then redeploy. Do not add `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PRIVATE_KEY`, `ADMIN_EMAIL`, or `GEMINI_API_KEY` to Vercel unless Vercel is also running the protected Express API. In the recommended architecture, those server-only values belong in the Cloud Run service’s Secret Manager bindings, while Vercel hosts the static client and proxies `/api/*` to Cloud Run.
+
+## 10. Troubleshoot `403 Missing or insufficient permissions` during admin bootstrap
+
+The `google.cloud.firestore` positional-filter warning is harmless. The important error is `PERMISSION_DENIED`. It means the Python script is using credentials that do not have access to the Firebase project, or it is using credentials from a different project than the Vercel Firebase configuration.
+
+For a reliable Windows PowerShell setup, download a service-account JSON from **Firebase Console → Project settings → Service accounts → Generate new private key**, save it locally as `serviceAccountKey.json` beside `admin_bootstrap.py`, and run:
+
+```powershell
+$env:ADMIN_EMAIL = "your-real-admin@example.com"
+$env:FIREBASE_SERVICE_ACCOUNT_PATH = ".\serviceAccountKey.json"
+py -3.13 admin_bootstrap.py --email $env:ADMIN_EMAIL --promote
+py -3.13 admin_bootstrap.py --list
+```
+
+Confirm that the JSON’s `project_id` is the same project ID shown in the Firebase Console and the same value as `VITE_FIREBASE_PROJECT_ID` in the Vercel deployment. Keep the file out of Git; `.gitignore` already excludes `serviceAccountKey.json`. The updated bootstrap script now resolves the Firebase Auth account by UID instead of relying on a Firestore email query and returns a non-zero exit code when promotion fails.
+
+After a successful promotion, verify the Firebase Console user has the correct email and that the Firestore profile at `users/<Firebase Auth UID>` has `role: admin`. The custom claim is not displayed in the Firestore document; it is attached to the Firebase Auth user token. Sign out and back in on the deployed site to refresh it. If the Administrator tab still returns a normal login error, first confirm the Firebase Auth account exists, Email/Password sign-in is enabled, the password is correct, and the email has been verified. If login succeeds but admin screens are unavailable, refresh the token and check `ADMIN_EMAIL`/`VITE_ADMIN_EMAIL` for exact spelling and casing-insensitive equality.
