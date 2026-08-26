@@ -1,15 +1,37 @@
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
 import { spawn } from 'child_process';
 import { GoogleGenAI } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
+import { createViteServer } from 'vite';
+import rateLimit from 'express-rate-limit';
+import { getAdminAuth, getAdminDb } from './lib/firebase/admin';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+const PYTHON_TIMEOUT_MS = 30_000;
+const MAX_TOP_K = 5;
 
-app.use(express.json({ limit: '10mb' }));
+type AuthenticatedRequest = Request & {
+  firebaseUser?: { uid: string; email?: string; admin?: boolean; [key: string]: unknown };
+};
 
-// Lazy GoogleGenAI client
+app.use(express.json({ limit: '256kb' }));
+
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const analysisLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api', apiLimiter);
+app.use(['/api/python', '/api/ai'], analysisLimiter);
+
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI | null {
   if (!aiClient && process.env.GEMINI_API_KEY) {
@@ -18,202 +40,235 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// Helper to execute Python engine actions
-function runPythonEngine(action: string, payload: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const pythonProcess = spawn('python3', [path.join(process.cwd(), 'python_engine.py'), action]);
+function getBearerToken(req: Request) {
+  const header = req.header('authorization') || '';
+  return header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : null;
+}
 
+async function requireFirebaseUser(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const token = getBearerToken(req);
+  if (!token) return res.status(401).json({ error: 'Firebase ID token required.' });
+  const adminAuth = getAdminAuth();
+  if (!adminAuth) {
+    return res.status(503).json({ error: 'Server Firebase Admin credentials are not configured.' });
+  }
+
+  try {
+    req.firebaseUser = await adminAuth.verifyIdToken(token);
+    return next();
+  } catch (error) {
+    console.warn('[API auth] Invalid Firebase ID token:', error instanceof Error ? error.message : error);
+    return res.status(401).json({ error: 'Invalid or expired Firebase ID token.' });
+  }
+}
+
+async function requireDesignatedAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const designatedEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const user = req.firebaseUser;
+  if (!designatedEmail) return res.status(503).json({ error: 'ADMIN_EMAIL is not configured on the server.' });
+  if (!user || user.email?.trim().toLowerCase() !== designatedEmail || user.admin !== true || user.email_verified !== true) {
+    return res.status(403).json({ error: 'Only the verified designated administrator can access this endpoint.' });
+  }
+
+  const adminDb = getAdminDb();
+  if (!adminDb) return res.status(503).json({ error: 'Server Firebase Admin credentials are not configured.' });
+  const profile = await adminDb.collection('users').doc(user.uid).get();
+  if (profile.data()?.role !== 'admin') {
+    return res.status(403).json({ error: 'Administrator profile is not provisioned.' });
+  }
+  return next();
+}
+
+function runPythonEngine(action: string, payload: unknown): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const pythonProcess = spawn('python3', [path.join(process.cwd(), 'python_engine.py'), action], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
+    const timeout = setTimeout(() => {
+      pythonProcess.kill('SIGKILL');
+      reject(new Error('Python analysis timed out.'));
+    }, PYTHON_TIMEOUT_MS);
 
     pythonProcess.stdout.on('data', (data) => {
       stdout += data.toString();
+      if (stdout.length > 2_000_000) pythonProcess.kill('SIGKILL');
     });
-
     pythonProcess.stderr.on('data', (data) => {
       stderr += data.toString();
     });
-
+    pythonProcess.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
     pythonProcess.on('close', (code) => {
-      if (code !== 0 && !stdout) {
-        return reject(new Error(stderr || `Python process exited with code ${code}`));
-      }
+      clearTimeout(timeout);
+      if (code !== 0 && !stdout) return reject(new Error(stderr || `Python process exited with code ${code}`));
       try {
-        const parsed = JSON.parse(stdout);
-        resolve(parsed);
-      } catch (err) {
-        resolve({ rawOutput: stdout, error: stderr || null });
+        resolve(JSON.parse(stdout));
+      } catch {
+        reject(new Error(stderr || 'Python engine returned invalid JSON.'));
       }
     });
 
-    pythonProcess.stdin.write(JSON.stringify(payload));
+    const serialized = JSON.stringify(payload);
+    if (Buffer.byteLength(serialized, 'utf8') > 2_000_000) {
+      pythonProcess.kill('SIGKILL');
+      return reject(new Error('Analysis payload is too large.'));
+    }
+    pythonProcess.stdin.write(serialized);
     pythonProcess.stdin.end();
   });
 }
 
-// ==========================================
-// API ROUTES
-// ==========================================
+function boundedTopK(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(MAX_TOP_K, Math.floor(parsed))) : 3;
+}
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString(), pythonReady: true });
+async function readLiveDataset() {
+  const adminDb = getAdminDb();
+  if (!adminDb) throw new Error('Server Firebase Admin credentials are not configured.');
+  const [usersSnapshot, tasksSnapshot, attendanceSnapshot] = await Promise.all([
+    adminDb.collection('users').get(),
+    adminDb.collection('tasks').get(),
+    adminDb.collection('attendance').get(),
+  ]);
+  return {
+    users: usersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+    tasks: tasksSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+    attendance: attendanceSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+  };
+}
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    pythonReady: true,
+    apiAuthRequired: true,
+    adminConfigured: Boolean(process.env.ADMIN_EMAIL),
+  });
 });
 
-// 1. Python RAG Semantic Search
-app.post('/api/python/rag-query', async (req, res) => {
+app.post('/api/python/rag-query', requireFirebaseUser, async (req, res) => {
   try {
-    const { query, top_k } = req.body;
-    const result = await runPythonEngine('rag-search', { query, top_k: top_k || 3 });
-    res.json(result);
+    const query = typeof req.body?.query === 'string' ? req.body.query.trim().slice(0, 500) : '';
+    if (!query) return res.status(400).json({ error: 'A non-empty query is required.' });
+    res.json(await runPythonEngine('rag-search', { query, top_k: boundedTopK(req.body?.top_k) }));
   } catch (error: any) {
     console.error('Python RAG error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. Python Volunteer Churn Risk ML
-app.post('/api/python/churn-analysis', async (req, res) => {
+app.post('/api/python/churn-analysis', requireFirebaseUser, requireDesignatedAdmin, async (req, res) => {
   try {
-    const { volunteers } = req.body;
-    const result = await runPythonEngine('churn-analysis', { volunteers });
-    res.json(result);
+    const dataset = await readLiveDataset();
+    const volunteers = dataset.users.filter((user: any) => user.role === 'volunteer');
+    res.json(await runPythonEngine('churn-analysis', { volunteers }));
   } catch (error: any) {
-    console.error('Python Churn analysis error:', error);
+    console.error('Python churn error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 3. Python K-Means Clustering
-app.post('/api/python/clustering', async (req, res) => {
+app.post('/api/python/clustering', requireFirebaseUser, requireDesignatedAdmin, async (req, res) => {
   try {
-    const { volunteers } = req.body;
-    const result = await runPythonEngine('clustering', { volunteers });
-    res.json(result);
+    const dataset = await readLiveDataset();
+    const volunteers = dataset.users.filter((user: any) => user.role === 'volunteer');
+    res.json(await runPythonEngine('clustering', { volunteers }));
   } catch (error: any) {
-    console.error('Python Clustering error:', error);
+    console.error('Python clustering error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 4. Python Time-Series Attendance Forecasting
-app.post('/api/python/attendance-forecast', async (req, res) => {
+app.post('/api/python/attendance-forecast', requireFirebaseUser, requireDesignatedAdmin, async (req, res) => {
   try {
-    const { attendance } = req.body;
-    const result = await runPythonEngine('attendance-forecast', { attendance });
-    res.json(result);
+    const dataset = await readLiveDataset();
+    res.json(await runPythonEngine('attendance-forecast', { attendance: dataset.attendance }));
   } catch (error: any) {
-    console.error('Python Attendance forecast error:', error);
+    console.error('Python forecast error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 5. Python Bipartite Task Optimization
-app.post('/api/python/optimize-tasks', async (req, res) => {
+app.post('/api/python/optimize-tasks', requireFirebaseUser, requireDesignatedAdmin, async (req, res) => {
   try {
-    const { tasks, volunteers } = req.body;
-    const result = await runPythonEngine('optimize-tasks', { tasks, volunteers });
-    res.json(result);
+    const dataset = await readLiveDataset();
+    const tasks = dataset.tasks.filter((task: any) => task.status === 'open');
+    const volunteers = dataset.users.filter((user: any) => user.role === 'volunteer');
+    res.json(await runPythonEngine('optimize-tasks', { tasks, volunteers }));
   } catch (error: any) {
-    console.error('Python Optimization error:', error);
+    console.error('Python optimization error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 6. Python Custom Code Runner (Data Science Terminal)
-app.post('/api/python/run', async (req, res) => {
+app.post('/api/python/run', requireFirebaseUser, requireDesignatedAdmin, async (req, res) => {
   try {
-    const { code, volunteers, tasks, attendance } = req.body;
-    const result = await runPythonEngine('run-script', { code, volunteers, tasks, attendance });
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    if (!code.trim()) return res.status(400).json({ error: 'Python code is required.' });
+    const result = await runPythonEngine('run-script', {
+      code,
+      ...(await readLiveDataset()),
+    });
     res.json(result);
   } catch (error: any) {
-    console.error('Python code run error:', error);
+    console.error('Python workbench error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 7. Gemini AI + RAG Ministry Assistant
-app.post('/api/ai/ask-rag', async (req, res) => {
+app.post('/api/ai/ask-rag', requireFirebaseUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { question, userContext } = req.body;
-    if (!question) {
-      return res.status(400).json({ error: 'Question is required' });
-    }
+    const question = typeof req.body?.question === 'string' ? req.body.question.trim().slice(0, 1000) : '';
+    if (!question) return res.status(400).json({ error: 'Question is required.' });
 
-    // Step 1: Retrieve relevant context using Python RAG
     const ragResult = await runPythonEngine('rag-search', { query: question, top_k: 3 });
-    const matchedDocs = ragResult?.results || [];
+    const matchedDocs = Array.isArray(ragResult?.results) ? ragResult.results : [];
     const contextText = matchedDocs
       .map((d: any, idx: number) => `[Source ${idx + 1}: ${d.title} (${d.category})]\n${d.content}`)
       .join('\n\n');
-
     const ai = getGeminiClient();
+
     if (ai) {
       const prompt = `You are the Grace Community Church AI Ministry & Pastoral Assistant.
-You have access to the official Church Ministry Handbook, standard operating procedures, safety rules, and volunteer policies.
+Use only the official retrieved policy documents below for operational claims. If the documents do not answer a question, say so and recommend contacting the ministry lead.
 
 Official Retrieved Church Policy Documents:
-${contextText || 'No specific document matched. Use standard Christian ministry pastoral best practices.'}
+${contextText || 'No specific document matched.'}
 
-User Information:
-Name: ${userContext?.name || 'Volunteer'}
-Role: ${userContext?.role || 'Volunteer'}
-Department: ${userContext?.department || 'General Ministry'}
+Authenticated User:
+Email: ${req.firebaseUser?.email || 'authenticated volunteer'}
 
-Volunteer Question: "${question}"
+Question: "${question}"
 
-Instructions:
-1. Provide a warm, encouraging, clear, and practical response.
-2. Cite the specific church operating procedure or safety guideline when applicable.
-3. Keep the tone helpful, pastoral, and concise (2-3 paragraphs max).`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
-        contents: prompt,
-      });
-
-      return res.json({
-        answer: response.text || 'Unable to generate response.',
-        retrievedDocuments: matchedDocs,
-        modelUsed: 'gemini-3.7-flash',
-      });
-    } else {
-      // Fallback deterministic RAG answer if GEMINI_API_KEY is not set
-      let fallbackAnswer = `Here is what the church ministry guidelines specify:\n\n`;
-      if (matchedDocs.length > 0) {
-        fallbackAnswer += `Based on "${matchedDocs[0].title}" (${matchedDocs[0].category}):\n${matchedDocs[0].content}\n\nFor further pastoral questions, please check in with Pastor David or your ministry lead.`;
-      } else {
-        fallbackAnswer += `All church volunteers report to their department lead 30 minutes before Sunday service. Ensure safety guidelines and the two-adult rule are maintained at all times.`;
-      }
-
-      return res.json({
-        answer: fallbackAnswer,
-        retrievedDocuments: matchedDocs,
-        modelUsed: 'local-rag-knowledge-engine',
-      });
+Give a warm, concise, practical answer in no more than three short paragraphs. Cite the relevant policy title when applicable.`;
+      const response = await ai.models.generateContent({ model: 'gemini-3.7-flash', contents: prompt });
+      return res.json({ answer: response.text || 'Unable to generate a response.', retrievedDocuments: matchedDocs, modelUsed: 'gemini-3.7-flash' });
     }
+
+    const answer = matchedDocs.length
+      ? `Based on "${matchedDocs[0].title}":\n\n${matchedDocs[0].content}\n\nFor questions requiring pastoral judgment, contact your ministry lead.`
+      : 'No matching church policy was found. Please contact your ministry lead for guidance.';
+    return res.json({ answer, retrievedDocuments: matchedDocs, modelUsed: 'local-rag-knowledge-engine' });
   } catch (error: any) {
-    console.error('AI RAG Error:', error);
+    console.error('AI RAG error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ==========================================
-// VITE / STATIC SERVING
-// ==========================================
-
 async function start() {
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get(/.*/, (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
   app.listen(PORT, '0.0.0.0', () => {
@@ -221,4 +276,4 @@ async function start() {
   });
 }
 
-start();
+void start();

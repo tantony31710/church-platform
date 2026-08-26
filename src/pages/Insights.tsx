@@ -12,6 +12,7 @@ import { PythonTaskOptimizer } from '@/components/insights/python-task-optimizer
 import { PythonDataWorkbench } from '@/components/insights/python-data-workbench';
 import { Card, Button } from '@/components/ui/button';
 import { useToast } from '@/lib/toast-context';
+import { useAuth } from '@/lib/auth-context';
 import {
   Users,
   CheckCircle2,
@@ -34,10 +35,15 @@ type InsightsTab = 'analytics' | 'rag' | 'churn' | 'optimizer' | 'workbench' | '
 
 export default function InsightsPage() {
   const { showToast } = useToast();
+  const { role, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<InsightsTab>('rag');
   const [users, setUsers] = useState(() => DataService.getUsers());
   const [tasks, setTasks] = useState(() => DataService.getTasks());
   const [attendance, setAttendance] = useState(() => DataService.getAttendance());
+
+  useEffect(() => {
+    if (role !== 'admin' && activeTab !== 'rag') setActiveTab('rag');
+  }, [role, activeTab]);
 
   useEffect(() => {
     const unsubscribeUsers = DataService.subscribe('users', setUsers);
@@ -53,7 +59,7 @@ export default function InsightsPage() {
     };
   }, []);
 
-  const totalVolunteers = users.length;
+  const totalVolunteers = role === 'admin' ? users.length : 1;
   const openTasks = tasks.filter((t) => t.status === 'open').length;
   const totalPoints = users.reduce((acc, u) => acc + (u.points || 0), 0);
   const totalCompleted = tasks.filter((t) => t.status === 'completed').length;
@@ -109,10 +115,12 @@ export default function InsightsPage() {
             </h1>
           </div>
 
-          <Button variant="outline" size="sm" onClick={handleExportReport} className="gap-2 self-start sm:self-auto">
-            <Download className="h-4 w-4" />
-            Export Full Analytics (JSON)
-          </Button>
+          {role === 'admin' && (
+            <Button variant="outline" size="sm" onClick={handleExportReport} className="gap-2 self-start sm:self-auto">
+              <Download className="h-4 w-4" />
+              Export Full Analytics (JSON)
+            </Button>
+          )}
         </div>
 
         {/* Top KPI Cards */}
@@ -120,10 +128,10 @@ export default function InsightsPage() {
           <div className="p-3.5 rounded-xl bg-white/5 border border-border">
             <div className="flex items-center gap-2 text-foreground/50 mb-1">
               <Users className="h-4 w-4 text-glow" />
-              <span className="text-[11px] uppercase font-semibold">Active Volunteers</span>
+              <span className="text-[11px] uppercase font-semibold">{role === 'admin' ? 'Active Volunteers' : 'Your Points'}</span>
             </div>
-            <p className="text-2xl font-extrabold text-foreground">{totalVolunteers}</p>
-            <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">+14% vs last month</p>
+            <p className="text-2xl font-extrabold text-foreground">{role === 'admin' ? totalVolunteers : profile?.points || 0}</p>
+            <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">{role === 'admin' ? 'Live Firestore roster' : 'Earned from completed tasks'}</p>
           </div>
 
           <div className="p-3.5 rounded-xl bg-white/5 border border-border">
@@ -149,8 +157,8 @@ export default function InsightsPage() {
               <TrendingUp className="h-4 w-4 text-blue-400" />
               <span className="text-[11px] uppercase font-semibold">Python Engine Status</span>
             </div>
-            <p className="text-2xl font-extrabold text-glow">Active</p>
-            <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">ML & RAG Online</p>
+            <p className="text-2xl font-extrabold text-glow">Protected</p>
+            <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">Authenticated Python API</p>
           </div>
         </div>
       </div>
@@ -167,55 +175,59 @@ export default function InsightsPage() {
           <span>Python RAG & SOP AI</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('churn')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'churn' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
-          }`}
-        >
-          <UserMinus className="h-3.5 w-3.5" />
-          <span>ML Churn & Retention</span>
-        </button>
+        {role === 'admin' && (
+          <>
+            <button
+              onClick={() => setActiveTab('churn')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'churn' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              <UserMinus className="h-3.5 w-3.5" />
+              <span>ML Churn & Retention</span>
+            </button>
 
-        <button
-          onClick={() => setActiveTab('optimizer')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'optimizer' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>AI Task Matchmaker</span>
-        </button>
+            <button
+              onClick={() => setActiveTab('optimizer')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'optimizer' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>AI Task Matchmaker</span>
+            </button>
 
-        <button
-          onClick={() => setActiveTab('workbench')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'workbench' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
-          }`}
-        >
-          <Terminal className="h-3.5 w-3.5" />
-          <span>Python Data Workbench</span>
-        </button>
+            <button
+              onClick={() => setActiveTab('workbench')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'workbench' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              <span>Python Data Workbench</span>
+            </button>
 
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'analytics' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
-          }`}
-        >
-          <BarChart3 className="h-3.5 w-3.5" />
-          <span>Attendance & Departments</span>
-        </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'analytics' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span>Attendance & Departments</span>
+            </button>
 
-        <button
-          onClick={() => setActiveTab('drift')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'drift' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
-          }`}
-        >
-          <Cpu className="h-3.5 w-3.5" />
-          <span>Embeddings & Drift</span>
-        </button>
+            <button
+              onClick={() => setActiveTab('drift')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'drift' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+              }`}
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>Embeddings & Drift</span>
+            </button>
+          </>
+        )}
       </div>
 
       {/* Tab 1: Python RAG Assistant */}

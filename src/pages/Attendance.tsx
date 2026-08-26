@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { QrGenerator } from '@/components/attendance/qr-generator';
 import { VolunteerCheckin } from '@/components/attendance/volunteer-checkin';
@@ -13,10 +13,14 @@ import {
 } from 'lucide-react';
 
 export default function AttendancePage() {
-  const { role, profile } = useAuth();
+  const { role } = useAuth();
   const [viewMode, setViewMode] = useState<'checkin' | 'broadcast'>(() =>
     role === 'admin' ? 'broadcast' : 'checkin'
   );
+
+  useEffect(() => {
+    if (role !== 'admin' && viewMode === 'broadcast') setViewMode('checkin');
+  }, [role, viewMode]);
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
@@ -50,6 +54,7 @@ export default function AttendancePage() {
             <span>Volunteer Check-In</span>
           </button>
 
+          {role === 'admin' && (
           <button
             onClick={() => setViewMode('broadcast')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -66,6 +71,7 @@ export default function AttendancePage() {
               </span>
             )}
           </button>
+          )}
         </div>
       </div>
 

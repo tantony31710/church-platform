@@ -72,9 +72,23 @@ def find_user_by_email(db, email):
     return None, None
 
 
+def designated_admin_email():
+    value = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    if not value:
+        print("❌ ADMIN_EMAIL must be set before changing admin access")
+        return None
+    return value
+
+
 def promote_to_admin(db, email):
-    """Promote a user to admin role."""
-    uid, user_data = find_user_by_email(db, email)
+    """Promote only the configured administrator email and set its custom claim."""
+    designated = designated_admin_email()
+    normalized_email = email.strip().lower()
+    if not designated or normalized_email != designated:
+        print("❌ Refusing promotion: the email must exactly match ADMIN_EMAIL")
+        return False
+
+    uid, user_data = find_user_by_email(db, normalized_email)
     
     if not uid:
         print(f"❌ User with email '{email}' not found")
@@ -90,7 +104,19 @@ def promote_to_admin(db, email):
                 batch.update(existing.reference, {"role": "volunteer"})
         batch.update(db.collection("users").document(uid), {"role": "admin"})
         batch.commit()
-        print(f"✅ Promoted '{email}' to the single admin role (UID: {uid})")
+
+        target_user = firebase_auth.get_user(uid)
+        target_claims = dict(target_user.custom_claims or {})
+        target_claims["admin"] = True
+        firebase_auth.set_custom_user_claims(uid, target_claims)
+        for existing in db.collection("users").stream():
+            if existing.id != uid and existing.to_dict().get("role") == "volunteer":
+                existing_user = firebase_auth.get_user(existing.id)
+                claims = dict(existing_user.custom_claims or {})
+                if claims.get("admin") is True:
+                    claims["admin"] = False
+                    firebase_auth.set_custom_user_claims(existing.id, claims)
+        print(f"✅ Promoted '{email}' to the single designated admin role (UID: {uid})")
         return True
     except Exception as e:
         print(f"❌ Failed to promote user: {e}")
@@ -98,8 +124,14 @@ def promote_to_admin(db, email):
 
 
 def demote_to_volunteer(db, email):
-    """Demote a user back to volunteer role."""
-    uid, user_data = find_user_by_email(db, email)
+    """Demote a non-designated user and remove its custom admin claim."""
+    designated = designated_admin_email()
+    normalized_email = email.strip().lower()
+    if designated and normalized_email == designated:
+        print("❌ Refusing demotion: ADMIN_EMAIL must remain the sole administrator")
+        return False
+
+    uid, user_data = find_user_by_email(db, normalized_email)
     
     if not uid:
         print(f"❌ User with email '{email}' not found")
@@ -111,6 +143,11 @@ def demote_to_volunteer(db, email):
     
     try:
         db.collection("users").document(uid).update({"role": "volunteer"})
+        existing_user = firebase_auth.get_user(uid)
+        claims = dict(existing_user.custom_claims or {})
+        if claims.get("admin") is True:
+            claims["admin"] = False
+            firebase_auth.set_custom_user_claims(uid, claims)
         print(f"✅ Demoted '{email}' to volunteer (UID: {uid})")
         return True
     except Exception as e:

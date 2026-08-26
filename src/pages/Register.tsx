@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/client';
 import { Button, Card } from '@/components/ui/button';
@@ -49,6 +49,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await sendEmailVerification(cred.user);
       await setDoc(doc(db, 'users', cred.user.uid), {
         name: name.trim(),
         email: email.trim(),
@@ -75,7 +76,7 @@ export default function RegisterPage() {
         badges: ['New Member'],
         joinedDate: new Date().toISOString(),
       });
-      showToast(`Welcome ${name}! Your starting balance is 0 points. Complete verified tasks to earn points.`);
+      showToast(`Welcome ${name}! Verify your email to activate the account. Starting balance: 0 points.`);
       navigate('/tasks');
     } catch (err) {
       console.error(err);

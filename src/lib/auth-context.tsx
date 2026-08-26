@@ -27,12 +27,14 @@ const AuthContext = createContext<AuthContextValue>({
   updateCurrentProfile: () => {},
 });
 
-function profileFromFirestore(firebaseUser: User, value: Record<string, any>): UserProfile {
+const designatedAdminEmail = String(import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+
+function profileFromFirestore(firebaseUser: User, value: Record<string, any>, effectiveRole?: Role): UserProfile {
   return {
     id: firebaseUser.uid,
     name: value.name || firebaseUser.displayName || 'Volunteer',
     email: firebaseUser.email || value.email || '',
-    role: value.role === 'admin' ? 'admin' : 'volunteer',
+    role: effectiveRole || (value.role === 'admin' ? 'admin' : 'volunteer'),
     skills: Array.isArray(value.skills) ? value.skills : [],
     points: Number(value.points || 0),
     avatar: value.avatar,
@@ -75,17 +77,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       unsubscribeProfile = onSnapshot(
         doc(db, 'users', nextUser.uid),
-        (snapshot) => {
+        async (snapshot) => {
           if (!snapshot.exists()) {
             setProfile(null);
             setRole('volunteer');
             setLoading(false);
             return;
           }
-          const nextProfile = profileFromFirestore(nextUser, snapshot.data());
-          DataService.startLiveSync(nextUser.uid, nextProfile.role === 'admin');
+
+          let hasAdminClaim = false;
+          try {
+            const token = await nextUser.getIdTokenResult();
+            hasAdminClaim = token.claims.admin === true;
+          } catch (error) {
+            console.error('[Auth] Could not verify Firebase claims:', error);
+          }
+
+          const isDesignatedAdmin = Boolean(
+            designatedAdminEmail && nextUser.email?.trim().toLowerCase() === designatedAdminEmail
+          );
+          const effectiveRole: Role =
+            isDesignatedAdmin && nextUser.emailVerified && hasAdminClaim && snapshot.data().role === 'admin'
+              ? 'admin'
+              : 'volunteer';
+          const nextProfile = profileFromFirestore(nextUser, snapshot.data(), effectiveRole);
+          DataService.startLiveSync(nextUser.uid, effectiveRole === 'admin');
           setProfile(nextProfile);
-          setRole(nextProfile.role);
+          setRole(effectiveRole);
           setLoading(false);
         },
         (error) => {

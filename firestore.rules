@@ -17,14 +17,16 @@ service cloud.firestore {
     // of duplicating custom claims setup right now.
     function isAdmin() {
       return isSignedIn() &&
+        request.auth.token.keys().hasAll(['admin']) &&
+        request.auth.token.admin == true &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // ---- users -------------------------------------------------------
     match /users/{userId} {
-      // Anyone signed in can read profiles (needed for leaderboard
-      // names, task assignment display, etc.)
-      allow read: if isSignedIn();
+      // Volunteers read only their own private profile. Admins can read
+      // the full roster for assignment and administration screens.
+      allow read: if isAdmin() || isOwner(userId);
 
       // Users can only create their own doc (on signup), and can only
       // ever create it once — not overwrite an existing profile.
@@ -37,13 +39,13 @@ service cloud.firestore {
       // Points only change via Cloud Functions using the Admin SDK,
       // which bypasses these rules entirely.
       allow update: if isOwner(userId) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['points', 'role']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'skills', 'avatar', 'department', 'phone'
+        ]);
 
-      // Only admins can change roles or manually adjust points, and
-      // even admins shouldn't really do this from the client — this
-      // is a safety valve, not the primary path.
-      allow update: if isAdmin();
-
+      // Roles, points, counters, and badges are changed only by the
+      // trusted Admin SDK in bootstrap and Cloud Functions. The client,
+      // including the administrator browser, cannot mutate them directly.
       allow delete: if isAdmin();
     }
 
@@ -54,20 +56,31 @@ service cloud.firestore {
       // Only admins/leaders create and delete tasks.
       allow create, delete: if isAdmin();
 
-      // Updates allowed for admins or when volunteers claim tasks.
-      // Need to allow updates for new task features (comments, etc).
+      // Admins manage tasks. Volunteers may claim an open task or complete/
+      // update subtasks on a task assigned to themselves, but cannot change
+      // the task value, title, owner, or arbitrary fields.
       allow update: if isAdmin() || (
         isSignedIn() &&
-        // Existing claim logic
         resource.data.status == 'open' &&
         request.resource.data.assignedTo == request.auth.uid &&
         request.resource.data.status == 'assigned' &&
         request.resource.data.title == resource.data.title &&
-        request.resource.data.pointsValue == resource.data.pointsValue
+        request.resource.data.pointsValue == resource.data.pointsValue &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'assignedTo', 'assignedToName'
+        ])
       ) || (
-        // Allow volunteers to update their own subtasks/comments/etc
         isSignedIn() &&
-        resource.data.assignedTo == request.auth.uid
+        resource.data.assignedTo == request.auth.uid &&
+        request.resource.data.assignedTo == resource.data.assignedTo &&
+        request.resource.data.assignedToName == resource.data.assignedToName &&
+        request.resource.data.pointsValue == resource.data.pointsValue &&
+        request.resource.data.title == resource.data.title &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'subtasks', 'completedAt', 'completedBy'
+        ]) &&
+        (request.resource.data.status == resource.data.status ||
+          (resource.data.status == 'assigned' && request.resource.data.status == 'completed'))
       );
 
       // Comments sub-collection
@@ -84,9 +97,11 @@ service cloud.firestore {
       // Admins can see everyone's, for the Insights tab.
       allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
 
-      // A volunteer can only mark THEIR OWN attendance (scanning the
-      // QR code writes their own uid, never someone else's).
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // A volunteer can only mark THEIR OWN attendance, and attendance
+      // never awards points.
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.pointsAwarded == 0;
 
       allow update, delete: if isAdmin();
     }

@@ -15,8 +15,16 @@ import {
   PythonForecastResult,
   PythonOptimizedAssignment,
 } from './types';
-import { collection, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { db } from './firebase/client';
+import { collection, deleteDoc, doc, documentId, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { auth, db } from './firebase/client';
+
+async function authorizedApiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
 
 const STORAGE_KEYS = {
   USERS: 'church_connect_users_v3',
@@ -27,6 +35,7 @@ const STORAGE_KEYS = {
   BENCHMARKS: 'church_connect_benchmarks_v3',
   CURRENT_USER_ID: 'church_connect_current_user_id_v3',
   ORGANIZATION: 'church_connect_organization_settings_v3',
+  LEADERBOARD: 'church_connect_leaderboard_v3',
 };
 
 const INITIAL_ORGANIZATION: ChurchOrganizationSettings = {
@@ -432,7 +441,7 @@ export const DataService = {
     cacheAndNotify('users', STORAGE_KEYS.USERS, []);
     cacheAndNotify('tasks', STORAGE_KEYS.TASKS, []);
     cacheAndNotify('attendance', STORAGE_KEYS.ATTENDANCE, []);
-    notify('leaderboard', []);
+    cacheAndNotify('leaderboard', STORAGE_KEYS.LEADERBOARD, []);
 
     const subscribeCollection = <T extends { id: string }>(
       key: string,
@@ -445,14 +454,16 @@ export const DataService = {
         (snapshot) => {
           const values = snapshot.docs.map((item) => mapper(item.data() as Record<string, any>, item.id));
           cacheAndNotify(key, storageKey, values);
-          if (key === 'users') notify('leaderboard', this.getLeaderboard());
         },
         (error) => console.error('[Live data] collection subscription failed:', error),
       );
       liveSyncUnsubscribers.push(unsubscribe);
     };
 
-    subscribeCollection<UserProfile>('users', collection(db, 'users'), STORAGE_KEYS.USERS, (value, id) => ({
+    const usersSource = isAdmin
+      ? collection(db, 'users')
+      : query(collection(db, 'users'), where(documentId(), '==', currentUserId));
+    subscribeCollection<UserProfile>('users', usersSource, STORAGE_KEYS.USERS, (value, id) => ({
       id,
       name: value.name || 'Volunteer',
       email: value.email || '',
@@ -483,6 +494,19 @@ export const DataService = {
       ...value,
       id,
     } as AttendanceRecord));
+    subscribeCollection<LeaderboardEntry>('leaderboard', collection(db, 'leaderboard'), STORAGE_KEYS.LEADERBOARD, (value, id) => ({
+      id,
+      name: value.name || 'Volunteer',
+      email: value.email || '',
+      points: Number(value.points || 0),
+      rank: 0,
+      role: value.role === 'admin' ? 'admin' : 'volunteer',
+      skills: Array.isArray(value.skills) ? value.skills : [],
+      streak: Number(value.streak || 0),
+      tasksCompleted: Number(value.tasksCompletedCount || value.tasksCompleted || 0),
+      attendanceCount: Number(value.attendanceCount || 0),
+      badges: Array.isArray(value.badges) ? value.badges : [],
+    } as LeaderboardEntry));
 
     const orgUnsubscribe = onSnapshot(doc(db, 'settings', 'organization'), (snapshot) => {
       if (snapshot.exists()) cacheAndNotify('organization', STORAGE_KEYS.ORGANIZATION, snapshot.data());
@@ -892,6 +916,16 @@ export const DataService = {
 
   // LEADERBOARD
   getLeaderboard(): LeaderboardEntry[] {
+    if (liveSyncActive) {
+      const raw = localStorage.getItem(STORAGE_KEYS.LEADERBOARD);
+      if (raw) {
+        try {
+          return JSON.parse(raw) as LeaderboardEntry[];
+        } catch {
+          // Fall through to the local projection while the next snapshot arrives.
+        }
+      }
+    }
     const users = this.getUsers();
     const sorted = [...users].sort((a, b) => (b.points || 0) - (a.points || 0));
     return sorted.map((u, i) => ({
@@ -988,7 +1022,7 @@ export const DataService = {
   // ==========================================
 
   async fetchPythonRagSearch(query: string, top_k: number = 3): Promise<PythonRagDocument[]> {
-    const res = await fetch('/api/python/rag-query', {
+    const res = await authorizedApiFetch('/api/python/rag-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, top_k }),
@@ -1001,7 +1035,7 @@ export const DataService = {
 
   async fetchPythonChurnAnalysis(): Promise<PythonChurnPrediction[]> {
     const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-    const res = await fetch('/api/python/churn-analysis', {
+    const res = await authorizedApiFetch('/api/python/churn-analysis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volunteers }),
@@ -1014,7 +1048,7 @@ export const DataService = {
 
   async fetchPythonClustering(): Promise<{ clusters: PythonClusterResult[]; silhouetteScore: number }> {
     const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-    const res = await fetch('/api/python/clustering', {
+    const res = await authorizedApiFetch('/api/python/clustering', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volunteers }),
@@ -1027,7 +1061,7 @@ export const DataService = {
 
   async fetchPythonAttendanceForecast(): Promise<PythonForecastResult | null> {
     const attendance = this.getAttendance();
-    const res = await fetch('/api/python/attendance-forecast', {
+    const res = await authorizedApiFetch('/api/python/attendance-forecast', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ attendance }),
@@ -1041,7 +1075,7 @@ export const DataService = {
   async fetchPythonTaskOptimization(): Promise<{ optimizedAssignments: PythonOptimizedAssignment[]; totalTasksOptimized: number; averageCompatibility: number }> {
     const openTasks = this.getTasks().filter((t) => t.status === 'open');
     const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-    const res = await fetch('/api/python/optimize-tasks', {
+    const res = await authorizedApiFetch('/api/python/optimize-tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tasks: openTasks, volunteers }),
@@ -1053,7 +1087,7 @@ export const DataService = {
   },
 
   async runPythonDataScript(code: string): Promise<{ success: boolean; output?: string; error?: string }> {
-    const res = await fetch('/api/python/run', {
+    const res = await authorizedApiFetch('/api/python/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, volunteers: this.getUsers(), tasks: this.getTasks(), attendance: this.getAttendance() }),
@@ -1063,7 +1097,7 @@ export const DataService = {
   },
 
   async askGeminiRagAssistant(question: string, userContext: any): Promise<{ answer: string; retrievedDocuments: PythonRagDocument[]; modelUsed: string }> {
-    const res = await fetch('/api/ai/ask-rag', {
+    const res = await authorizedApiFetch('/api/ai/ask-rag', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, userContext }),
