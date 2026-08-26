@@ -1,20 +1,15 @@
 {
-  "indexes": [
+  "indexes": [],
+  "fieldOverrides": [
     {
-      "collectionGroup": "tasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "deadline", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "leaderboard",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "points", "order": "DESCENDING" }
+      "collectionGroup": "users",
+      "fieldPath": "points",
+      "indexes": [
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        }
       ]
     }
-  ],
-  "fieldOverrides": []
+  ]
 }
