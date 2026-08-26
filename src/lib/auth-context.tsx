@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           let hasAdminClaim = false;
           try {
-            const token = await nextUser.getIdTokenResult();
+            const token = await nextUser.getIdTokenResult(true);
             hasAdminClaim = token.claims.admin === true;
           } catch (error) {
             console.error('[Auth] Could not verify Firebase claims:', error);

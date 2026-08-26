@@ -46,9 +46,12 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      // Claims are assigned server-side by admin_bootstrap.py. Force a fresh
+      // token before entering the protected admin route.
+      await credential.user.getIdToken(true);
       showToast(mode === 'admin' ? 'Administrator signed in successfully.' : 'Signed in successfully.');
-      navigate('/tasks');
+      navigate(mode === 'admin' ? '/admin' : '/tasks', { replace: true });
     } catch (err: any) {
       console.error('Firebase sign-in failed:', err);
       setError(
