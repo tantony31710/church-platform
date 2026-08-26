@@ -124,3 +124,78 @@ export interface BenchmarkMetrics {
   latencyMs: number;
   timestamp: any;
 }
+
+export interface ChurchOrganizationSettings {
+  churchName: string;
+  campusName: string;
+  address: string;
+  phone: string;
+  contactEmail: string;
+  leadPastorName: string;
+  serviceTimes: string;
+  motto: string;
+  updatedAt: string;
+}
+
+export interface PythonRagDocument {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  similarity: number;
+  matched_terms?: string[];
+}
+
+export interface PythonChurnPrediction {
+  volunteerId: string;
+  name: string;
+  email: string;
+  department: string;
+  points: number;
+  streak: number;
+  tasksCompleted: number;
+  churnProbability: number;
+  riskTier: 'High Risk' | 'Moderate Risk' | 'Healthy & Engaged';
+  riskFactors: string[];
+  retentionAction: string;
+}
+
+export interface PythonClusterResult {
+  clusterName: string;
+  color: string;
+  count: number;
+  members: Array<{
+    id: string;
+    name: string;
+    department: string;
+    points: number;
+    x: number;
+    y: number;
+    z: number;
+  }>;
+}
+
+export interface PythonForecastResult {
+  historicalAverage: number;
+  momentum: string;
+  forecast: Array<{
+    week: string;
+    date: string;
+    projectedVolunteers: number;
+    lowerBound: number;
+    upperBound: number;
+    seasonalTrend: string;
+  }>;
+}
+
+export interface PythonOptimizedAssignment {
+  taskId: string;
+  taskTitle: string;
+  category: string;
+  pointsValue: number;
+  matchedVolunteerId: string;
+  matchedVolunteerName: string;
+  compatibilityScore: number;
+  reason: string;
+}
+

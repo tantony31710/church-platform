@@ -81,9 +81,9 @@ export function TaskList() {
   };
 
   const handleCompleteTask = (taskId: string) => {
-    const result = DataService.completeTask(taskId);
+    const result = DataService.completeTask(taskId, profile?.id);
     if (result) {
-      showToast(`🎉 Task completed! +${result.pointsAwarded} points awarded to your profile!`);
+      showToast(`🎉 Task completed! +${result.pointsAwarded} points awarded to ${result.volunteer?.name || 'your profile'}!`);
       setSelectedTask(null);
     }
   };

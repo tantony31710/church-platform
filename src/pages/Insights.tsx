@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DataService } from '@/lib/data-service';
 import { AttendanceChart } from '@/components/insights/attendance-chart';
 import { DepartmentDistribution } from '@/components/insights/department-distribution';
-import { AiMatchRecommendations } from '@/components/insights/ai-match-recommendations';
-import { FeatureImportance } from '@/components/insights/feature-importance';
 import { DataDriftMonitor } from '@/components/insights/data-drift-monitor';
 import { EmbeddingClusters } from '@/components/insights/embedding-clusters';
 import { TimeSeriesDecomposition } from '@/components/insights/time-series-decomposition';
+import { PythonRagAssistant } from '@/components/insights/python-rag-assistant';
+import { PythonMlChurnPredictor } from '@/components/insights/python-ml-churn-predictor';
+import { PythonTaskOptimizer } from '@/components/insights/python-task-optimizer';
+import { PythonDataWorkbench } from '@/components/insights/python-data-workbench';
 import { Card, Button } from '@/components/ui/button';
 import { useToast } from '@/lib/toast-context';
 import {
@@ -20,12 +22,19 @@ import {
   Activity,
   Cpu,
   BarChart3,
-  Flame
+  Flame,
+  Brain,
+  Terminal,
+  UserMinus,
+  Layers,
+  Search
 } from 'lucide-react';
+
+type InsightsTab = 'analytics' | 'rag' | 'churn' | 'optimizer' | 'workbench' | 'drift';
 
 export default function InsightsPage() {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'analytics' | 'ai' | 'datascience'>('analytics');
+  const [activeTab, setActiveTab] = useState<InsightsTab>('rag');
 
   const users = DataService.getUsers();
   const tasks = DataService.getTasks();
@@ -78,12 +87,12 @@ export default function InsightsPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-glow/15 text-glow font-bold border border-glow/30">
-                INTELLIGENCE & METRICS
+                AI & DATA SCIENCE HUB
               </span>
-              <span className="text-xs text-foreground/50">Volunteer Workforce & Engagement Telemetry</span>
+              <span className="text-xs text-foreground/50">Python ML Models, RAG Knowledge & Advanced Telemetry</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Ministry Insights & AI Hub
+              Ministry Insights & AI Suite
             </h1>
           </div>
 
@@ -125,20 +134,60 @@ export default function InsightsPage() {
           <div className="p-3.5 rounded-xl bg-white/5 border border-border">
             <div className="flex items-center gap-2 text-foreground/50 mb-1">
               <TrendingUp className="h-4 w-4 text-blue-400" />
-              <span className="text-[11px] uppercase font-semibold">Match Accuracy</span>
+              <span className="text-[11px] uppercase font-semibold">Python Engine Status</span>
             </div>
-            <p className="text-2xl font-extrabold text-glow">94.8%</p>
-            <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">Cosine skill alignment</p>
+            <p className="text-2xl font-extrabold text-glow">Active</p>
+            <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">ML & RAG Online</p>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex p-1 rounded-xl glass border border-border self-start">
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl glass border border-border">
+        <button
+          onClick={() => setActiveTab('rag')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'rag' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+          }`}
+        >
+          <Brain className="h-3.5 w-3.5" />
+          <span>Python RAG & SOP AI</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('churn')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'churn' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+          }`}
+        >
+          <UserMinus className="h-3.5 w-3.5" />
+          <span>ML Churn & Retention</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('optimizer')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'optimizer' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>AI Task Matchmaker</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('workbench')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'workbench' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
+          }`}
+        >
+          <Terminal className="h-3.5 w-3.5" />
+          <span>Python Data Workbench</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'analytics' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'analytics' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
           }`}
         >
           <BarChart3 className="h-3.5 w-3.5" />
@@ -146,27 +195,45 @@ export default function InsightsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('ai')}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'ai' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>AI Task Recommendations</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('datascience')}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            activeTab === 'datascience' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+          onClick={() => setActiveTab('drift')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'drift' ? 'bg-glow text-background font-bold shadow-sm' : 'text-foreground/70 hover:text-foreground hover:bg-white/5'
           }`}
         >
           <Cpu className="h-3.5 w-3.5" />
-          <span>ML Benchmarks & Drift</span>
+          <span>Embeddings & Drift</span>
         </button>
       </div>
 
-      {/* Tab 1: Community Analytics */}
+      {/* Tab 1: Python RAG Assistant */}
+      {activeTab === 'rag' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <PythonRagAssistant />
+        </motion.div>
+      )}
+
+      {/* Tab 2: Python ML Churn Predictor */}
+      {activeTab === 'churn' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <PythonMlChurnPredictor />
+        </motion.div>
+      )}
+
+      {/* Tab 3: Python Task Optimizer */}
+      {activeTab === 'optimizer' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <PythonTaskOptimizer />
+        </motion.div>
+      )}
+
+      {/* Tab 4: Python Data Workbench */}
+      {activeTab === 'workbench' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <PythonDataWorkbench />
+        </motion.div>
+      )}
+
+      {/* Tab 5: Analytics Charts */}
       {activeTab === 'analytics' && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -197,45 +264,8 @@ export default function InsightsPage() {
         </motion.div>
       )}
 
-      {/* Tab 2: AI Recommendations */}
-      {activeTab === 'ai' && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid gap-6 lg:grid-cols-12"
-        >
-          <div className="lg:col-span-8 glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-glow" />
-                  Intelligent Task & Volunteer Matchmaker
-                </h2>
-                <p className="text-xs text-foreground/50">
-                  Matches volunteer skill vectors with open serving requirements
-                </p>
-              </div>
-            </div>
-            <AiMatchRecommendations />
-          </div>
-
-          <div className="lg:col-span-4 glass-strong rounded-2xl border border-border-strong p-6 shadow-xl flex flex-col justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-glow" />
-                Matching Algorithm Features
-              </h2>
-              <FeatureImportance />
-            </div>
-            <div className="mt-4 pt-3 border-t border-border/80 text-[11px] text-foreground/50">
-              Weights updated dynamically based on completion ratings & weekly streaks.
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Tab 3: Data Science & ML Benchmarks */}
-      {activeTab === 'datascience' && (
+      {/* Tab 6: Data Drift & Embeddings */}
+      {activeTab === 'drift' && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

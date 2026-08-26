@@ -28,7 +28,7 @@ import { useThemeStore, ThemeType } from '@/lib/theme-manager';
 import { DataService } from '@/lib/data-service';
 import { DataFlowBackground } from '../three/DataFlowBackground';
 import { AnnouncementBanner } from '@/components/ui/announcement-banner';
-import { CommunityAnnouncement, Task } from '@/lib/types';
+import { CommunityAnnouncement, Task, ChurchOrganizationSettings } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 
 export default function DashboardLayout() {
@@ -41,6 +41,9 @@ export default function DashboardLayout() {
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [announcement, setAnnouncement] = useState<CommunityAnnouncement | null>(null);
   const [openTasksCount, setOpenTasksCount] = useState<number>(0);
+  const [organization, setOrganization] = useState<ChurchOrganizationSettings>(() =>
+    DataService.getOrganizationSettings()
+  );
   const allUsers = DataService.getUsers();
 
   useEffect(() => {
@@ -48,6 +51,7 @@ export default function DashboardLayout() {
     setAnnouncement(DataService.getAnnouncement());
     const tasks = DataService.getTasks();
     setOpenTasksCount(tasks.filter((t) => t.status === 'open').length);
+    setOrganization(DataService.getOrganizationSettings());
 
     const unsubAnn = DataService.subscribe<CommunityAnnouncement>('announcement', (ann) => {
       setAnnouncement(ann);
@@ -55,10 +59,14 @@ export default function DashboardLayout() {
     const unsubTasks = DataService.subscribe<Task[]>('tasks', (newTasks) => {
       setOpenTasksCount(newTasks.filter((t) => t.status === 'open').length);
     });
+    const unsubOrg = DataService.subscribe<ChurchOrganizationSettings>('organization', (org) => {
+      setOrganization(org);
+    });
 
     return () => {
       unsubAnn();
       unsubTasks();
+      unsubOrg();
     };
   }, []);
 
@@ -99,8 +107,8 @@ export default function DashboardLayout() {
                   LIVE
                 </span>
               </div>
-              <p className="text-[11px] text-foreground/50 tracking-normal hidden sm:block">
-                Volunteer & Ministry Platform
+              <p className="text-[11px] text-foreground/50 tracking-normal hidden sm:block truncate max-w-[200px]">
+                {organization?.churchName || 'Grace Community Church'}
               </p>
             </div>
           </button>

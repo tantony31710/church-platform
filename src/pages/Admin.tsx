@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth-context';
 import { TaskForm } from '@/components/admin/task-form';
 import { TaskManager } from '@/components/admin/task-manager';
 import { VolunteerManager } from '@/components/admin/volunteer-manager';
+import { ChurchSettingsManager } from '@/components/admin/church-settings';
 import { DataService } from '@/lib/data-service';
 import { useToast } from '@/lib/toast-context';
 import { Button, Card } from '@/components/ui/button';
@@ -16,15 +17,17 @@ import {
   RotateCcw,
   Download,
   AlertTriangle,
-  Radio
+  Radio,
+  Church,
+  Settings
 } from 'lucide-react';
 
-type Tab = 'tasks' | 'volunteers' | 'announcements' | 'data-tools';
+type Tab = 'organization' | 'tasks' | 'volunteers' | 'announcements' | 'data-tools';
 
 export default function AdminPage() {
   const { role, profile, toggleRole } = useAuth();
   const { showToast } = useToast();
-  const [tab, setTab] = useState<Tab>('tasks');
+  const [tab, setTab] = useState<Tab>('organization');
   const [announcementMsg, setAnnouncementMsg] = useState('');
   const [announcementPriority, setAnnouncementPriority] = useState<'normal' | 'urgent' | 'announcement'>('urgent');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -53,33 +56,42 @@ export default function AdminPage() {
   };
 
   const handleResetData = () => {
-    if (window.confirm('Reset all demo data to default clean church seed state?')) {
+    if (window.confirm('Reset all demo data to default clean church seed state (1 Admin, 0 volunteer points)?')) {
       DataService.resetToDefaultData();
-      showToast('Database reset to defaults.');
+      showToast('Database reset to defaults with 1 Admin & 0 volunteer points.');
       window.location.reload();
     }
   };
 
-  // If user is currently in volunteer mode, offer quick 1-click elevation
-  if (role !== 'admin') {
-    return (
-      <div className="max-w-xl mx-auto p-8 rounded-2xl glass-strong border border-border text-center flex flex-col items-center gap-4">
-        <div className="h-12 w-12 rounded-full bg-purple-500/20 text-purple-300 flex items-center justify-center">
-          <ShieldCheck className="h-6 w-6" />
-        </div>
-        <h2 className="text-lg font-bold text-foreground">Leadership Permissions Required</h2>
-        <p className="text-xs text-foreground/60 max-w-sm">
-          You are currently signed in as a standard volunteer (<strong className="text-foreground">{profile?.name}</strong>). Switch your role to test Pastoral & Admin controls.
-        </p>
-        <Button variant="default" onClick={toggleRole}>
-          Elevate to Admin / Leader
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
+      {/* Role Notice Banner if in Volunteer Mode */}
+      {role !== 'admin' && (
+        <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">
+                Leadership Controls Active
+              </p>
+              <p className="text-[11px] text-foreground/60">
+                You are currently signed in as <strong className="text-foreground">{profile?.name}</strong>. You have full access to view and update church settings, tasks, and volunteer rosters.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={toggleRole}
+            className="text-xs shrink-0"
+          >
+            Switch to Pastor David (Admin)
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -97,13 +109,23 @@ export default function AdminPage() {
 
           <div className="flex items-center gap-2">
             <span className="text-xs px-3 py-1.5 rounded-xl bg-white/5 border border-border text-foreground/70">
-              Logged in: <strong className="text-foreground">{profile?.name}</strong>
+              Active Admin: <strong className="text-foreground">{role === 'admin' ? profile?.name : 'Pastor David Anderson'}</strong>
             </span>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex p-1 rounded-xl glass border border-border self-start mt-6 flex-wrap">
+        <div className="flex p-1 rounded-xl glass border border-border self-start mt-6 flex-wrap gap-1">
+          <button
+            onClick={() => setTab('organization')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'organization' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+            }`}
+          >
+            <Church className="h-3.5 w-3.5" />
+            <span>Church Profile & Settings</span>
+          </button>
+
           <button
             onClick={() => setTab('tasks')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -111,7 +133,7 @@ export default function AdminPage() {
             }`}
           >
             <ListTodo className="h-3.5 w-3.5" />
-            <span>Ministry Tasks & Assignments</span>
+            <span>Ministry Tasks & Needs</span>
           </button>
 
           <button
@@ -121,7 +143,7 @@ export default function AdminPage() {
             }`}
           >
             <Users className="h-3.5 w-3.5" />
-            <span>Volunteer Roster & Permissions</span>
+            <span>Volunteer Roster (Single Admin)</span>
           </button>
 
           <button
@@ -145,6 +167,13 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
+
+      {/* Tab 0: Church Profile */}
+      {tab === 'organization' && (
+        <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
+          <ChurchSettingsManager />
+        </div>
+      )}
 
       {/* Tab 1: Tasks */}
       {tab === 'tasks' && (
@@ -257,7 +286,7 @@ export default function AdminPage() {
                 <h2 className="text-base font-bold text-foreground">Reset Demo Environment</h2>
               </div>
               <p className="text-xs text-foreground/60 leading-relaxed mb-4">
-                Revert all tasks, volunteers, attendance records, and active pins to the original clean community seed dataset.
+                Revert all tasks, volunteers, attendance records, and organization settings to clean live defaults (1 Admin, 0 volunteer points).
               </p>
             </div>
 
