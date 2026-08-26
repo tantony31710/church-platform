@@ -122,8 +122,8 @@ app.post('/api/python/optimize-tasks', async (req, res) => {
 // 6. Python Custom Code Runner (Data Science Terminal)
 app.post('/api/python/run', async (req, res) => {
   try {
-    const { code, volunteers, tasks } = req.body;
-    const result = await runPythonEngine('run-script', { code, volunteers, tasks });
+    const { code, volunteers, tasks, attendance } = req.body;
+    const result = await runPythonEngine('run-script', { code, volunteers, tasks, attendance });
     res.json(result);
   } catch (error: any) {
     console.error('Python code run error:', error);

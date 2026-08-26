@@ -58,14 +58,14 @@ export function VolunteerCheckin() {
     }
   };
 
-  const triggerCheckinCelebration = (pts: number) => {
+  const triggerCheckinCelebration = () => {
     confetti({
       particleCount: 75,
       spread: 60,
       origin: { y: 0.65 },
       colors: ['#2dd4bf', '#38bdf8', '#fbbf24', '#a855f7'],
     });
-    showToast(`🎉 Verified Check-in! +${pts} attendance points awarded to your profile!`);
+    showToast('Verified check-in recorded. Your attendance streak has been updated.');
   };
 
   const handleInstantCheckIn = () => {
@@ -76,7 +76,7 @@ export function VolunteerCheckin() {
       if (res.alreadyCheckedIn) {
         showToast('You are already checked in for today’s service!', 'info');
       } else {
-        triggerCheckinCelebration(res.pointsAwarded);
+        triggerCheckinCelebration();
       }
     } catch (e) {
       console.error(e);
@@ -105,7 +105,7 @@ export function VolunteerCheckin() {
       if (res.alreadyCheckedIn) {
         showToast('You are already checked in today!', 'info');
       } else {
-        triggerCheckinCelebration(res.pointsAwarded);
+        triggerCheckinCelebration();
         setEnteredPin('');
       }
     } finally {
@@ -162,7 +162,7 @@ export function VolunteerCheckin() {
                 <div>
                   <h4 className="text-sm font-bold text-emerald-400">You are Checked In Today!</h4>
                   <p className="text-xs text-foreground/70">
-                    Recorded at {todayRecord ? new Date(todayRecord.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Service time'} (+15 pts awarded)
+                    Recorded at {todayRecord ? new Date(todayRecord.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Service time'} · attendance telemetry saved
                   </p>
                 </div>
               </div>
@@ -177,7 +177,7 @@ export function VolunteerCheckin() {
                 className="w-full text-base font-bold shadow-[0_0_30px_hsl(var(--glow)/0.2)] py-4 h-auto"
               >
                 <Sparkles className="h-5 w-5 mr-2" />
-                {loading ? 'Verifying...' : '1-Click Instant Check-In (+15 pts)'}
+                {loading ? 'Verifying...' : '1-Click Instant Check-In'}
               </Button>
 
               {/* PIN Code option */}
@@ -229,7 +229,7 @@ export function VolunteerCheckin() {
 
           <div className="pt-4 border-t border-border/80 flex items-center justify-between text-xs">
             <span className="text-foreground/50">Next milestone: 20 services</span>
-            <span className="text-glow font-bold">+{15} pts / service</span>
+            <span className="text-glow font-bold">0 points / service</span>
           </div>
         </div>
 

@@ -81,12 +81,16 @@ def promote_to_admin(db, email):
         return False
     
     if user_data.get("role") == "admin":
-        print(f"ℹ️  User '{email}' is already an admin")
-        return True
-    
+        print(f"ℹ️  User '{email}' is already the requested admin; reconciling any other admin records.")
+
     try:
-        db.collection("users").document(uid).update({"role": "admin"})
-        print(f"✅ Promoted '{email}' to admin (UID: {uid})")
+        batch = db.batch()
+        for existing in db.collection("users").stream():
+            if existing.id != uid and existing.to_dict().get("role") == "admin":
+                batch.update(existing.reference, {"role": "volunteer"})
+        batch.update(db.collection("users").document(uid), {"role": "admin"})
+        batch.commit()
+        print(f"✅ Promoted '{email}' to the single admin role (UID: {uid})")
         return True
     except Exception as e:
         print(f"❌ Failed to promote user: {e}")

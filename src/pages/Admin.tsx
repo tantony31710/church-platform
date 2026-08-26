@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { TaskForm } from '@/components/admin/task-form';
 import { TaskManager } from '@/components/admin/task-manager';
@@ -25,12 +26,11 @@ import {
 type Tab = 'organization' | 'tasks' | 'volunteers' | 'announcements' | 'data-tools';
 
 export default function AdminPage() {
-  const { role, profile, toggleRole } = useAuth();
+  const { role, profile } = useAuth();
   const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>('organization');
   const [announcementMsg, setAnnouncementMsg] = useState('');
   const [announcementPriority, setAnnouncementPriority] = useState<'normal' | 'urgent' | 'announcement'>('urgent');
-  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     const current = DataService.getAnnouncement();
@@ -40,58 +40,17 @@ export default function AdminPage() {
     }
   }, []);
 
+  if (role !== 'admin') {
+    return <Navigate to="/tasks" replace />;
+  }
+
   const handleSaveAnnouncement = () => {
     DataService.saveAnnouncement(announcementMsg, announcementPriority, profile?.name || 'Pastor David');
     showToast(announcementMsg.trim() ? 'Global announcement broadcasted!' : 'Announcement cleared.');
   };
 
-  const handleGenerateSynthetic = () => {
-    setIsGenerating(true);
-    try {
-      const res = DataService.generateSyntheticDataset(3);
-      showToast(`✨ Generated ${res.volunteersCreated} volunteers & ${res.tasksCreated} ministry tasks!`);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleResetData = () => {
-    if (window.confirm('Reset all demo data to default clean church seed state (1 Admin, 0 volunteer points)?')) {
-      DataService.resetToDefaultData();
-      showToast('Database reset to defaults with 1 Admin & 0 volunteer points.');
-      window.location.reload();
-    }
-  };
-
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
-      {/* Role Notice Banner if in Volunteer Mode */}
-      {role !== 'admin' && (
-        <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-foreground">
-                Leadership Controls Active
-              </p>
-              <p className="text-[11px] text-foreground/60">
-                You are currently signed in as <strong className="text-foreground">{profile?.name}</strong>. You have full access to view and update church settings, tasks, and volunteer rosters.
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="default"
-            onClick={toggleRole}
-            className="text-xs shrink-0"
-          >
-            Switch to Pastor David (Admin)
-          </Button>
-        </div>
-      )}
-
       {/* Header */}
       <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -163,7 +122,7 @@ export default function AdminPage() {
             }`}
           >
             <Database className="h-3.5 w-3.5" />
-            <span>Data Operations & Sandbox</span>
+            <span>Live Data & AI</span>
           </button>
         </div>
       </div>
@@ -253,49 +212,41 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tab 4: Data Operations & Sandbox */}
+      {/* Tab 4: Live Data & AI */}
       {tab === 'data-tools' && (
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Synthetic Data Generator */}
-          <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-glow mb-2">
-                <Sparkles className="h-5 w-5" />
-                <h2 className="text-base font-bold text-foreground">Synthetic Volunteer Data Generator</h2>
-              </div>
-              <p className="text-xs text-foreground/60 leading-relaxed mb-4">
-                Instantly populate your community database with realistic volunteers, diverse department giftings, and active Sunday assignments to test matchmaking and charts.
-              </p>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl lg:col-span-2">
+            <div className="flex items-center gap-2 text-glow mb-2">
+              <Database className="h-5 w-5" />
+              <h2 className="text-base font-bold text-foreground">Live Firestore Data Sources</h2>
             </div>
-
-            <Button
-              variant="glow"
-              onClick={handleGenerateSynthetic}
-              disabled={isGenerating}
-              className="w-full font-bold"
-            >
-              {isGenerating ? 'Generating...' : 'Generate 3 Volunteers + 3 Tasks'}
-            </Button>
+            <p className="text-xs text-foreground/60 leading-relaxed mb-5">
+              Users, tasks, attendance, announcements, and church settings are synchronized from Firestore. There are no browser-only seed records in the authenticated workspace.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['Users', 'Live user profiles, roles, and task-earned points'],
+                ['Tasks', 'Assignments and completion status with audit-safe updates'],
+                ['Attendance', 'Check-in records used as engagement telemetry'],
+                ['AI & Insights', 'Python RAG, ML predictions, clustering, and analysis'],
+              ].map(([title, description]) => (
+                <div key={title} className="rounded-xl border border-border bg-white/5 p-4">
+                  <p className="text-sm font-bold text-foreground">{title}</p>
+                  <p className="mt-1 text-xs text-foreground/55">{description}</p>
+                </div>
+              ))}
+            </div>
           </div>
-
-          {/* Database Reset */}
-          <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-amber-400 mb-2">
-                <RotateCcw className="h-5 w-5" />
-                <h2 className="text-base font-bold text-foreground">Reset Demo Environment</h2>
-              </div>
-              <p className="text-xs text-foreground/60 leading-relaxed mb-4">
-                Revert all tasks, volunteers, attendance records, and organization settings to clean live defaults (1 Admin, 0 volunteer points).
-              </p>
+          <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
+            <div className="flex items-center gap-2 text-emerald-400 mb-2">
+              <Sparkles className="h-5 w-5" />
+              <h2 className="text-base font-bold text-foreground">Points Policy</h2>
             </div>
-
-            <Button
-              variant="danger"
-              onClick={handleResetData}
-              className="w-full font-bold"
-            >
-              Reset to Clean Defaults
+            <p className="text-xs text-foreground/60 leading-relaxed">
+              Every volunteer starts at <strong className="text-foreground">0 points</strong>. Points are awarded once, by the trusted task-completion trigger, after a task changes to completed. Attendance never grants points.
+            </p>
+            <Button variant="glow" className="mt-5 w-full" onClick={() => window.location.assign('/insights')}>
+              Open AI & Insights
             </Button>
           </div>
         </div>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Shield, Award, Plus, Search, Flame, UserCheck, Star } from 'lucide-react';
+import { ShieldCheck, Search } from 'lucide-react';
 import { Card, Button } from '@/components/ui/button';
 import { DataService } from '@/lib/data-service';
 import { useToast } from '@/lib/toast-context';
-import type { UserProfile, Role } from '@/lib/types';
+import type { UserProfile } from '@/lib/types';
 
 export function VolunteerManager() {
   const { showToast } = useToast();
@@ -18,19 +18,6 @@ export function VolunteerManager() {
     setVolunteers(DataService.getUsers());
     return () => unsub();
   }, []);
-
-  const handleRoleToggle = (userId: string, currentRole: Role) => {
-    const newRole: Role = currentRole === 'admin' ? 'volunteer' : 'admin';
-    const updated = DataService.updateUserRole(userId, newRole);
-    if (updated) {
-      showToast(`Updated ${updated.name}'s role to ${newRole}.`);
-    }
-  };
-
-  const handleAwardBonusPoints = (user: UserProfile, pts: number) => {
-    DataService.awardPoints(user.id, pts, 'Admin Bonus');
-    showToast(`Awarded +${pts} bonus points to ${user.name}!`);
-  };
 
   const filtered = volunteers.filter((v) => {
     if (search.trim()) {
@@ -49,7 +36,7 @@ export function VolunteerManager() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/80">
         <div>
           <h2 className="text-sm font-bold text-foreground">Volunteer Roster & Permissions</h2>
-          <p className="text-xs text-foreground/50">Manage pastoral leadership permissions and grant service bonuses</p>
+          <p className="text-xs text-foreground/50">Review the live volunteer roster and task-earned service points</p>
         </div>
 
         <div className="relative w-full sm:w-64">
@@ -112,31 +99,11 @@ export function VolunteerManager() {
                 </div>
               </div>
 
-              {/* Actions: Role Toggle & Bonus Points */}
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleAwardBonusPoints(v, 25)}
-                  className="h-8 text-xs gap-1"
-                  title="Award +25 points for exceptional help"
-                >
-                  <Star className="h-3.5 w-3.5 text-amber-400" />
-                  +25 pts
-                </Button>
-
-                <button
-                  onClick={() => handleRoleToggle(v.id, v.role)}
-                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors shrink-0 ${
-                    v.role === 'admin'
-                      ? 'border-purple-500/40 bg-purple-500/15 text-purple-300'
-                      : 'border-border text-foreground/60 hover:border-glow/40 hover:text-foreground'
-                  }`}
-                  title={v.role === 'admin' ? 'Revoke Admin Privileges' : 'Promote to Admin / Leader'}
-                >
-                  {v.role === 'admin' ? <ShieldCheck className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
-                  <span>{v.role === 'admin' ? 'Leader (Admin)' : 'Make Leader'}</span>
-                </button>
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-foreground/60">
+                  {v.role === 'admin' ? <ShieldCheck className="h-3.5 w-3.5 text-purple-300" /> : null}
+                  {v.role === 'admin' ? 'Single Admin Account' : 'Volunteer Account'}
+                </span>
               </div>
             </Card>
           </motion.div>

@@ -1,5 +1,5 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const db = getFirestore();
 
@@ -30,13 +30,24 @@ export const onTaskCompleted = onDocumentUpdated('tasks/{taskId}', async (event)
     if (!userData) return;
 
     const newPoints = (userData.points ?? 0) + pointsValue;
-    tx.update(userRef, { points: newPoints });
+    const tasksCompletedCount = (userData.tasksCompletedCount ?? 0) + 1;
+    const badges = new Set<string>(Array.isArray(userData.badges) ? userData.badges : []);
+    badges.add('First Step');
+    if (tasksCompletedCount >= 3) badges.add('Faithful Servant');
+    if (newPoints >= 50) badges.add('Master Organizer');
+    if (newPoints >= 100) badges.add('Century Club');
+    if (newPoints >= 250) badges.add('Community Pillar');
+    tx.update(userRef, {
+      points: newPoints,
+      tasksCompletedCount,
+      badges: Array.from(badges),
+    });
 
     // Keep the denormalized leaderboard doc in sync in the same
     // transaction, so leaderboard reads never lag behind actual points.
     tx.set(
       leaderboardRef,
-      { name: userData.name, points: newPoints },
+      { name: userData.name, points: newPoints, tasksCompletedCount },
       { merge: true }
     );
   });

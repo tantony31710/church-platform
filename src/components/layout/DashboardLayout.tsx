@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ListTodo,
@@ -9,9 +9,6 @@ import {
   ShieldCheck,
   LogOut,
   Flame,
-  Award,
-  Sparkles,
-  Users,
   Sun,
   Moon,
   Box,
@@ -19,7 +16,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  RotateCcw,
   Bell,
   HeartHandshake
 } from 'lucide-react';
@@ -32,7 +28,7 @@ import { CommunityAnnouncement, Task, ChurchOrganizationSettings } from '@/lib/t
 import { Button } from '@/components/ui/button';
 
 export default function DashboardLayout() {
-  const { user, profile, role, loading, switchUser, toggleRole, logout } = useAuth();
+  const { user, profile, role, loading, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme, show3D, toggle3D } = useThemeStore();
@@ -44,7 +40,6 @@ export default function DashboardLayout() {
   const [organization, setOrganization] = useState<ChurchOrganizationSettings>(() =>
     DataService.getOrganizationSettings()
   );
-  const allUsers = DataService.getUsers();
 
   useEffect(() => {
     // Read announcement and open tasks count
@@ -69,6 +64,14 @@ export default function DashboardLayout() {
       unsubOrg();
     };
   }, []);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-foreground/60">Loading your live church workspace…</div>;
+  }
+
+  if (!user || !profile) {
+    return <Navigate to="/login" replace />;
+  }
 
   const navItems = [
     { to: '/tasks', label: 'Tasks', icon: ListTodo, badge: openTasksCount > 0 ? openTasksCount : null },
@@ -264,52 +267,10 @@ export default function DashboardLayout() {
                     <span className="text-xs px-2 py-0.5 rounded-md bg-glow/15 text-glow font-semibold border border-glow/30">
                       🏆 {profile?.points || 0} Total Points
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleRole();
-                      }}
-                      className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 border border-border text-foreground transition-colors ml-auto"
-                    >
-                      Switch to {role === 'admin' ? 'Volunteer' : 'Admin'}
-                    </button>
                   </div>
                 </div>
 
-                <div className="px-2 py-1 text-[10px] uppercase font-bold text-foreground/40 tracking-wider">
-                  Quick Switch Persona
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-0.5">
-                  {allUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => switchUser(u.id)}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg text-left transition-colors ${
-                        profile?.id === u.id
-                          ? 'bg-glow/20 text-glow font-medium'
-                          : 'text-foreground/70 hover:bg-white/10 hover:text-foreground'
-                      }`}
-                    >
-                      <div className="min-w-0 pr-2">
-                        <p className="font-medium text-foreground truncate">{u.name}</p>
-                        <p className="text-[10px] text-foreground/40 capitalize">{u.role} · {u.skills?.[0] || 'Member'}</p>
-                      </div>
-                      <span className="text-[10px] font-semibold text-glow shrink-0">{u.points} pts</span>
-                    </button>
-                  ))}
-                </div>
-
                 <div className="mt-2 pt-1.5 border-t border-border/70 flex gap-1">
-                  <button
-                    onClick={() => {
-                      DataService.resetToDefaultData();
-                      window.location.reload();
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-foreground/50 hover:text-foreground hover:bg-white/5 rounded-lg transition-colors"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Reset Data
-                  </button>
                   <button
                     onClick={logout}
                     className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -375,7 +336,7 @@ export default function DashboardLayout() {
         )}
       </AnimatePresence>
 
-      {/* Demo Mode Subheader / Quick Actions Banner */}
+      {/* Live session status banner */}
       <div className="bg-gradient-to-r from-glow/10 via-accent/10 to-transparent border-b border-border/60 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2 text-foreground/80">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -386,12 +347,6 @@ export default function DashboardLayout() {
           <span className="text-foreground/50 hidden sm:inline">
             Logged in as <strong className="text-foreground">{profile?.name}</strong> ({role})
           </span>
-          <button
-            onClick={toggleRole}
-            className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 border border-border text-foreground font-semibold text-[11px] transition-colors"
-          >
-            Switch to {role === 'admin' ? 'Volunteer View' : 'Leadership View'}
-          </button>
         </div>
       </div>
 

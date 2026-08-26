@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DataService } from '@/lib/data-service';
 import { AttendanceChart } from '@/components/insights/attendance-chart';
@@ -35,10 +35,23 @@ type InsightsTab = 'analytics' | 'rag' | 'churn' | 'optimizer' | 'workbench' | '
 export default function InsightsPage() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<InsightsTab>('rag');
+  const [users, setUsers] = useState(() => DataService.getUsers());
+  const [tasks, setTasks] = useState(() => DataService.getTasks());
+  const [attendance, setAttendance] = useState(() => DataService.getAttendance());
 
-  const users = DataService.getUsers();
-  const tasks = DataService.getTasks();
-  const attendance = DataService.getAttendance();
+  useEffect(() => {
+    const unsubscribeUsers = DataService.subscribe('users', setUsers);
+    const unsubscribeTasks = DataService.subscribe('tasks', setTasks);
+    const unsubscribeAttendance = DataService.subscribe('attendance', setAttendance);
+    setUsers(DataService.getUsers());
+    setTasks(DataService.getTasks());
+    setAttendance(DataService.getAttendance());
+    return () => {
+      unsubscribeUsers();
+      unsubscribeTasks();
+      unsubscribeAttendance();
+    };
+  }, []);
 
   const totalVolunteers = users.length;
   const openTasks = tasks.filter((t) => t.status === 'open').length;

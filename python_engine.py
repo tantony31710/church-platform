@@ -7,6 +7,7 @@ High-performance pure Python data science & intelligence backend.
 import sys
 import json
 import math
+import ast
 import re
 import random
 from collections import Counter, defaultdict
@@ -407,6 +408,46 @@ def optimize_task_allocation(open_tasks, volunteers):
 # 6. MAIN CLI / DISPATCHER
 # ==========================================
 
+ALLOWED_WORKBENCH_MODULES = {"json", "math", "collections"}
+ALLOWED_BUILTINS = {
+    "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict,
+    "enumerate": enumerate, "float": float, "int": int, "len": len,
+    "list": list, "max": max, "min": min, "print": print, "range": range,
+    "round": round, "set": set, "sorted": sorted, "str": str, "sum": sum,
+    "tuple": tuple, "zip": zip,
+}
+
+
+def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
+    root = name.split(".", 1)[0]
+    if root not in ALLOWED_WORKBENCH_MODULES:
+        raise ImportError(f"Import '{name}' is not allowed in the workbench")
+    return __import__(name, globals, locals, fromlist, level)
+
+
+def validate_workbench_code(code):
+    if len(code) > 20000:
+        raise ValueError("Workbench code is limited to 20,000 characters")
+    tree = ast.parse(code, mode="exec")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+            if any(name.split(".", 1)[0] not in ALLOWED_WORKBENCH_MODULES for name in names):
+                raise ValueError("Only json, math, and collections imports are allowed")
+        if isinstance(node, ast.ImportFrom):
+            module = (node.module or "").split(".", 1)[0]
+            if module not in ALLOWED_WORKBENCH_MODULES:
+                raise ValueError("Only json, math, and collections imports are allowed")
+        if isinstance(node, (ast.Name, ast.Attribute)):
+            identifier = node.id if isinstance(node, ast.Name) else node.attr
+            if identifier.startswith("__"):
+                raise ValueError("Dunder access is not allowed")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in {"eval", "exec", "compile", "open", "input"}:
+                raise ValueError(f"'{node.func.id}' is not allowed")
+    return tree
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "No action specified. Usage: python_engine.py <action> [payload_json]"}))
@@ -458,14 +499,27 @@ def main():
         
     elif action == "run-script":
         code = payload.get("code", "")
-        local_scope = {"volunteers": payload.get("volunteers", []), "tasks": payload.get("tasks", [])}
+        local_scope = {
+            "volunteers": payload.get("volunteers", []),
+            "tasks": payload.get("tasks", []),
+            "attendance": payload.get("attendance", []),
+        }
         try:
-            # Execute safely
+            # Execute with a constrained standard-library surface. The workbench
+            # receives live datasets but cannot access the filesystem, network,
+            # process APIs, or unrestricted builtins.
             import io
             from contextlib import redirect_stdout
+            tree = validate_workbench_code(code)
+            safe_globals = {
+                "__builtins__": {**ALLOWED_BUILTINS, "__import__": restricted_import},
+                "json": json,
+                "math": math,
+                "Counter": Counter,
+            }
             f = io.StringIO()
             with redirect_stdout(f):
-                exec(code, {}, local_scope)
+                exec(compile(tree, "<church-workbench>", "exec"), safe_globals, local_scope)
             output = f.getvalue()
             print(json.dumps({"success": True, "output": output}))
         except Exception as e:

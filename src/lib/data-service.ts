@@ -15,6 +15,8 @@ import {
   PythonForecastResult,
   PythonOptimizedAssignment,
 } from './types';
+import { collection, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { db } from './firebase/client';
 
 const STORAGE_KEYS = {
   USERS: 'church_connect_users_v3',
@@ -385,6 +387,27 @@ const INITIAL_ANNOUNCEMENT: CommunityAnnouncement = {
 // Event Subscriptions Listener System
 type Listener<T> = (data: T) => void;
 const listeners: Record<string, Set<Listener<any>>> = {};
+let liveSyncActive = false;
+let liveSyncUnsubscribers: Array<() => void> = [];
+
+function cacheAndNotify(key: string, storageKey: string, data: unknown) {
+  localStorage.setItem(storageKey, JSON.stringify(data));
+  notify(key, data);
+}
+
+function writeLive(path: string, data: Record<string, unknown>) {
+  if (!liveSyncActive) return;
+  void setDoc(doc(db, path), data, { merge: true }).catch((error) => {
+    console.error(`[Live data] Failed to write ${path}:`, error);
+  });
+}
+
+function updateLive(path: string, data: Record<string, unknown>) {
+  if (!liveSyncActive) return;
+  void updateDoc(doc(db, path), data).catch((error) => {
+    console.error(`[Live data] Failed to update ${path}:`, error);
+  });
+}
 
 function notify(key: string, data: any) {
   if (listeners[key]) {
@@ -399,6 +422,86 @@ function notify(key: string, data: any) {
 }
 
 export const DataService = {
+  // FIRESTORE LIVE SYNC
+  startLiveSync(currentUserId: string, isAdmin = false) {
+    this.stopLiveSync();
+    liveSyncActive = true;
+
+    // Never show the bundled demo seed after a real Firebase session starts.
+    Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+    cacheAndNotify('users', STORAGE_KEYS.USERS, []);
+    cacheAndNotify('tasks', STORAGE_KEYS.TASKS, []);
+    cacheAndNotify('attendance', STORAGE_KEYS.ATTENDANCE, []);
+    notify('leaderboard', []);
+
+    const subscribeCollection = <T extends { id: string }>(
+      key: string,
+      source: ReturnType<typeof collection> | ReturnType<typeof query>,
+      storageKey: string,
+      mapper: (value: Record<string, any>, id: string) => T,
+    ) => {
+      const unsubscribe = onSnapshot(
+        source,
+        (snapshot) => {
+          const values = snapshot.docs.map((item) => mapper(item.data() as Record<string, any>, item.id));
+          cacheAndNotify(key, storageKey, values);
+          if (key === 'users') notify('leaderboard', this.getLeaderboard());
+        },
+        (error) => console.error('[Live data] collection subscription failed:', error),
+      );
+      liveSyncUnsubscribers.push(unsubscribe);
+    };
+
+    subscribeCollection<UserProfile>('users', collection(db, 'users'), STORAGE_KEYS.USERS, (value, id) => ({
+      id,
+      name: value.name || 'Volunteer',
+      email: value.email || '',
+      role: value.role === 'admin' ? 'admin' : 'volunteer',
+      skills: Array.isArray(value.skills) ? value.skills : [],
+      points: Number(value.points || 0),
+      avatar: value.avatar,
+      department: value.department,
+      phone: value.phone,
+      streak: Number(value.streak || 0),
+      badges: Array.isArray(value.badges) ? value.badges : [],
+      joinedDate: value.joinedDate,
+      tasksCompletedCount: Number(value.tasksCompletedCount || 0),
+      attendanceCount: Number(value.attendanceCount || 0),
+    }));
+    subscribeCollection<Task>('tasks', collection(db, 'tasks'), STORAGE_KEYS.TASKS, (value, id) => ({
+      ...value,
+      id,
+      status: value.status || 'open',
+      assignedTo: value.assignedTo || null,
+      subtasks: Array.isArray(value.subtasks) ? value.subtasks : [],
+      tags: Array.isArray(value.tags) ? value.tags : [],
+    } as Task));
+    const attendanceSource = isAdmin
+      ? collection(db, 'attendance')
+      : query(collection(db, 'attendance'), where('userId', '==', currentUserId));
+    subscribeCollection<AttendanceRecord>('attendance', attendanceSource, STORAGE_KEYS.ATTENDANCE, (value, id) => ({
+      ...value,
+      id,
+    } as AttendanceRecord));
+
+    const orgUnsubscribe = onSnapshot(doc(db, 'settings', 'organization'), (snapshot) => {
+      if (snapshot.exists()) cacheAndNotify('organization', STORAGE_KEYS.ORGANIZATION, snapshot.data());
+    }, (error) => console.error('[Live data] organization subscription failed:', error));
+    const announcementUnsubscribe = onSnapshot(doc(db, 'settings', 'announcement'), (snapshot) => {
+      if (snapshot.exists()) cacheAndNotify('announcement', STORAGE_KEYS.ANNOUNCEMENT, snapshot.data());
+    }, (error) => console.error('[Live data] announcement subscription failed:', error));
+    const sessionUnsubscribe = onSnapshot(doc(db, 'settings', 'session'), (snapshot) => {
+      if (snapshot.exists()) cacheAndNotify('session', STORAGE_KEYS.SESSION, snapshot.data());
+    }, (error) => console.error('[Live data] session subscription failed:', error));
+    liveSyncUnsubscribers.push(orgUnsubscribe, announcementUnsubscribe, sessionUnsubscribe);
+  },
+
+  stopLiveSync() {
+    liveSyncUnsubscribers.forEach((unsubscribe) => unsubscribe());
+    liveSyncUnsubscribers = [];
+    liveSyncActive = false;
+  },
+
   // Subscribers
   subscribe<T>(key: string, callback: Listener<T>): () => void {
     if (!listeners[key]) {
@@ -429,6 +532,7 @@ export const DataService = {
     const updated = { ...current, ...updates, updatedAt: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEYS.ORGANIZATION, JSON.stringify(updated));
     notify('organization', updated);
+    writeLive('settings/organization', updated as unknown as Record<string, unknown>);
     return updated;
   },
 
@@ -562,6 +666,7 @@ export const DataService = {
 
     tasks.unshift(newTask);
     this.saveTasks(tasks);
+    writeLive(`tasks/${newTask.id}`, newTask as unknown as Record<string, unknown>);
     return newTask;
   },
 
@@ -589,6 +694,7 @@ export const DataService = {
     if (index === -1) return null;
     tasks[index] = { ...tasks[index], ...updates };
     this.saveTasks(tasks);
+    updateLive(`tasks/${id}`, updates as Record<string, unknown>);
     return tasks[index];
   },
 
@@ -597,6 +703,7 @@ export const DataService = {
     const filtered = tasks.filter((t) => t.id !== id);
     if (filtered.length !== tasks.length) {
       this.saveTasks(filtered);
+      if (liveSyncActive) void deleteDoc(doc(db, `tasks/${id}`)).catch((error) => console.error('[Live data] Failed to delete task:', error));
       return true;
     }
     return false;
@@ -610,6 +717,7 @@ export const DataService = {
     tasks[index].assignedTo = user.id;
     tasks[index].assignedToName = user.name;
     this.saveTasks(tasks);
+    updateLive(`tasks/${taskId}`, { status: 'assigned', assignedTo: user.id, assignedToName: user.name });
     return tasks[index];
   },
 
@@ -621,6 +729,7 @@ export const DataService = {
     tasks[index].assignedTo = null;
     tasks[index].assignedToName = null;
     this.saveTasks(tasks);
+    updateLive(`tasks/${taskId}`, { status: 'open', assignedTo: null, assignedToName: null });
     return tasks[index];
   },
 
@@ -633,6 +742,7 @@ export const DataService = {
       st.id === subtaskId ? { ...st, completed: !st.completed } : st
     );
     this.saveTasks(tasks);
+    updateLive(`tasks/${taskId}`, { subtasks: task.subtasks });
     return task;
   },
 
@@ -651,10 +761,11 @@ export const DataService = {
       if (u) task.assignedToName = u.name;
     }
     this.saveTasks(tasks);
+    updateLive(`tasks/${taskId}`, task as unknown as Record<string, unknown>);
 
     let updatedVolunteer: UserProfile | null = null;
     const targetUserId = task.assignedTo || completedByUserId;
-    if (targetUserId) {
+    if (targetUserId && !liveSyncActive) {
       const users = this.getUsers();
       const uIndex = users.findIndex((u) => u.id === targetUserId);
       if (uIndex !== -1) {
@@ -727,6 +838,7 @@ export const DataService = {
     };
     localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(updated));
     notify('session', updated);
+    writeLive('settings/session', updated as unknown as Record<string, unknown>);
     return updated;
   },
 
@@ -747,7 +859,7 @@ export const DataService = {
       return { record: existing, alreadyCheckedIn: true, pointsAwarded: 0 };
     }
 
-    const points = 15; // 15 points per church attendance
+    const points = 0; // Points are earned only after verified task completion
     const newRecord: AttendanceRecord = {
       id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
       userId: user.id,
@@ -764,14 +876,10 @@ export const DataService = {
     attendance.unshift(newRecord);
     this.saveAttendance(attendance);
 
-    // Update user points and streak
-    const users = this.getUsers();
-    const uIndex = users.findIndex((u) => u.id === user.id);
-    if (uIndex !== -1) {
-      users[uIndex].points += points;
-      users[uIndex].streak = (users[uIndex].streak || 0) + 1;
-      users[uIndex].attendanceCount = (users[uIndex].attendanceCount || 0) + 1;
-      this.saveUsers(users);
+    // Attendance is recorded live, but does not award service points.
+    if (liveSyncActive) {
+      void setDoc(doc(db, `attendance/${newRecord.id}`), newRecord as unknown as Record<string, unknown>)
+        .catch((error) => console.error('[Live data] Failed to record attendance:', error));
     }
 
     // Update session attendee count
@@ -826,6 +934,7 @@ export const DataService = {
     };
     localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENT, JSON.stringify(announcement));
     notify('announcement', announcement);
+    writeLive('settings/announcement', announcement as unknown as Record<string, unknown>);
     return announcement;
   },
 
@@ -872,392 +981,97 @@ export const DataService = {
     return matches.sort((a, b) => b.matchScore - a.matchScore);
   },
 
-  // SYNTHETIC DATA GENERATOR
-  generateSyntheticDataset(count: number = 5): { volunteersCreated: number; tasksCreated: number } {
-    const names = ['Jordan Lee', 'Hannah Miller', 'Caleb Rivera', 'Chloe Bennett', 'Samuel Davis', 'Rachel Adams', 'Benjamin Ross'];
-    const skillSets = [
-      ['AV / Tech', 'Sound Mixing'],
-      ['Hospitality', 'Welcome Team'],
-      ['Youth & Childcare', 'Teaching'],
-      ['Music & Worship', 'Guitar'],
-      ['Facilities & Setup', 'Maintenance'],
-      ['Admin & Outreach', 'Social Media'],
-    ];
-
-    const currentUsers = this.getUsers();
-    let volunteersCreated = 0;
-
-    for (let i = 0; i < count; i++) {
-      const name = names[i % names.length] + ' ' + Math.floor(10 + Math.random() * 89);
-      const skills = skillSets[i % skillSets.length];
-      const newUser: UserProfile = {
-        id: `user_synth_${Date.now()}_${i}`,
-        name,
-        email: `${name.toLowerCase().replace(/\s+/g, '.')}@community.org`,
-        role: 'volunteer',
-        skills,
-        points: Math.floor(50 + Math.random() * 250),
-        streak: Math.floor(1 + Math.random() * 12),
-        joinedDate: new Date(Date.now() - 86400000 * Math.floor(30 + Math.random() * 200)).toISOString(),
-        tasksCompletedCount: Math.floor(2 + Math.random() * 15),
-        attendanceCount: Math.floor(5 + Math.random() * 25),
-        badges: ['Community Star'],
-      };
-      currentUsers.push(newUser);
-      volunteersCreated++;
-    }
-    this.saveUsers(currentUsers);
-
-    // Create 3 synthetic tasks
-    const taskTitles = [
-      { title: 'Youth Night Pizza & Game Setup', cat: 'Youth & Childcare' as const, skill: 'Youth & Childcare', pts: 20 },
-      { title: 'Audio Cable Testing & Soldering', cat: 'AV & Tech' as const, skill: 'AV / Tech', pts: 25 },
-      { title: 'Sanctuary Flower Arrangement & Stage Decor', cat: 'Facilities & Setup' as const, skill: 'Facilities & Setup', pts: 15 },
-    ];
-
-    let tasksCreated = 0;
-    taskTitles.forEach((t) => {
-      this.createTask({
-        title: t.title,
-        description: `Synthetic generated assignment for ${t.cat}. Complete all preparatory checklists before weekend service.`,
-        category: t.cat,
-        requiredSkill: t.skill,
-        deadline: new Date(Date.now() + 86400000 * 3).toISOString(),
-        pointsValue: t.pts,
-        priority: 'medium',
-        tags: ['Automated', t.cat],
-        subtasks: ['Setup workspace', 'Execute core task', 'Sanitize and clean up'],
-        location: 'Church Campus',
-      });
-      tasksCreated++;
-    });
-
-    return { volunteersCreated, tasksCreated };
-  },
+  // Production analytics use live Firestore records.
 
   // ==========================================
   // PYTHON AI & DATA SCIENCE BACKEND CALLS
   // ==========================================
 
   async fetchPythonRagSearch(query: string, top_k: number = 3): Promise<PythonRagDocument[]> {
-    try {
-      const res = await fetch('/api/python/rag-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, top_k }),
-      });
-      const data = await res.json();
-      if (data.results && data.results.length > 0) return data.results;
-    } catch (e) {
-      console.warn('Backend fetch failed, using local RAG engine:', e);
-    }
-
-    // Local deterministic RAG vector index fallback
-    const qLower = query.toLowerCase();
-    const mockKnowledge = [
-      {
-        id: 'doc_av_policy',
-        category: 'Media & Tech Guidelines',
-        title: 'AV & Live Streaming Standard Operating Procedure',
-        content: 'All AV & Sound Board volunteers must report 45 minutes prior to Sunday service (8:45 AM). Perform audio gain staging, verify wireless mic batteries (minimum 2 bars), calibrate PTZ presets, and start OBS / ATEM streaming encoders exactly 10 minutes before the opening call to worship. In case of feedback, immediately engage notch filters at 2.5kHz and 4kHz.',
-        tags: ['audio', 'streaming', 'av', 'cameras', 'sound', 'safety'],
-      },
-      {
-        id: 'doc_childcare_safety',
-        category: 'NextGen & Child Safety',
-        title: 'Youth & Childcare Two-Adult Safety Rule',
-        content: 'All children’s ministry volunteers must have completed MinistrySafe background verification. The Two-Adult Rule is strictly enforced in all classrooms and check-in stations. No volunteer may be alone with a minor. Match 4-digit parent security tags before releasing any toddler or child.',
-        tags: ['childcare', 'youth', 'safety', 'background', 'security', 'kids'],
-      },
-      {
-        id: 'doc_hospitality',
-        category: 'Hospitality & Connections',
-        title: 'Foyer Hospitality & Greeter Welcome Manual',
-        content: 'Greeters are the primary face of Grace Community Church. Arrive 30 minutes before service. Provide physical welcome packets to first-time guests, hand out communion cups on the first Sunday of every month, and assist wheelchair and stroller access at the North Entrance.',
-        tags: ['hospitality', 'welcome', 'greeters', 'communion', 'foyer'],
-      },
-      {
-        id: 'doc_points_policy',
-        category: 'Volunteer Leadership',
-        title: 'Volunteer Service Points & Recognition System',
-        content: 'All new church volunteers begin with 0 service points. Points are awarded in real time upon successful completion of verified ministry assignments: 15 points for standard tasks, 20-30 points for high priority needs, and 10 points for regular Sunday check-in.',
-        tags: ['points', 'leaderboard', 'recognition', 'tasks', 'attendance', 'badges'],
-      },
-      {
-        id: 'doc_facilities_prep',
-        category: 'Operations & Logistics',
-        title: 'Facilities Setup, Sanctuary Lighting & Teardown Protocol',
-        content: 'Facilities crew handles sanctuary seating layout (minimum 36-inch aisle clearance), HVAC pre-cooling to 70 degrees 1 hour prior to arrival, and stage lighting dimming cues.',
-        tags: ['facilities', 'setup', 'lighting', 'hvac', 'safety', 'sanctuary'],
-      },
-      {
-        id: 'doc_pastoral_counseling',
-        category: 'Pastoral Care',
-        title: 'Prayer Team & Pastoral Care Guidelines',
-        content: 'Altar prayer team members must serve in pairs. Maintain strict confidentiality for all prayer requests. For acute crisis, grief, or mental health referrals, escort individuals to the Pastoral Suite in Room 102 and alert Pastor David Anderson.',
-        tags: ['prayer', 'pastoral', 'care', 'crisis', 'confidentiality'],
-      },
-    ];
-
-    const results = mockKnowledge
-      .map((doc) => {
-        let score = 0;
-        const terms = [...doc.tags, ...doc.title.toLowerCase().split(' ')];
-        terms.forEach((t) => {
-          if (qLower.includes(t)) score += 20;
-        });
-        if (doc.content.toLowerCase().includes(qLower)) score += 40;
-        const sim = Math.min(98, Math.max(35, score + 45));
-        return { ...doc, similarity: sim, matched_terms: doc.tags.slice(0, 3) };
-      })
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, top_k);
-
-    return results;
+    const res = await fetch('/api/python/rag-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, top_k }),
+    });
+    if (!res.ok) throw new Error(`Python RAG request failed (${res.status})`);
+    const data = await res.json();
+    if (!Array.isArray(data.results)) throw new Error('Python RAG returned an invalid response');
+    return data.results;
   },
 
   async fetchPythonChurnAnalysis(): Promise<PythonChurnPrediction[]> {
-    try {
-      const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-      const res = await fetch('/api/python/churn-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ volunteers }),
-      });
-      const data = await res.json();
-      if (data.predictions && data.predictions.length > 0) return data.predictions;
-    } catch (e) {
-      console.warn('Backend fetch failed, using local ML churn model:', e);
-    }
-
     const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-    return volunteers.map((v) => {
-      const tasksDone = v.tasksCompletedCount || 0;
-      const streak = v.streak || 0;
-      let prob = 45;
-      const factors: string[] = [];
-      if (tasksDone === 0) {
-        prob += 25;
-        factors.push('No completed tasks yet (new volunteer onboarding phase)');
-      }
-      if (streak < 2) {
-        prob += 15;
-        factors.push('Short weekly attendance streak (< 2 weeks)');
-      } else {
-        prob -= 20;
-        factors.push('Consistent weekly attendance habit');
-      }
-
-      const churnPct = Math.min(88, Math.max(12, prob));
-      let riskTier: 'High Risk' | 'Moderate Risk' | 'Healthy & Engaged' = 'Moderate Risk';
-      let action = 'Invite to upcoming ministry fellowship lunch';
-      if (churnPct >= 60) {
-        riskTier = 'High Risk';
-        action = 'Pastoral check-in call & 1-on-1 coffee recommendation';
-      } else if (churnPct <= 35) {
-        riskTier = 'Healthy & Engaged';
-        action = 'Consider promoting to team coordinator or mentor';
-      }
-
-      return {
-        volunteerId: v.id,
-        name: v.name,
-        email: v.email,
-        department: v.department || 'Ministry',
-        points: v.points || 0,
-        streak: v.streak || 1,
-        tasksCompleted: tasksDone,
-        churnProbability: churnPct,
-        riskTier,
-        riskFactors: factors,
-        retentionAction: action,
-      };
-    }).sort((a, b) => b.churnProbability - a.churnProbability);
+    const res = await fetch('/api/python/churn-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ volunteers }),
+    });
+    if (!res.ok) throw new Error(`Python churn request failed (${res.status})`);
+    const data = await res.json();
+    if (!Array.isArray(data.predictions)) throw new Error('Python churn returned an invalid response');
+    return data.predictions;
   },
 
   async fetchPythonClustering(): Promise<{ clusters: PythonClusterResult[]; silhouetteScore: number }> {
-    try {
-      const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-      const res = await fetch('/api/python/clustering', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ volunteers }),
-      });
-      const data = await res.json();
-      if (data.clustering && data.clustering.clusters) return data.clustering;
-    } catch (e) {
-      console.warn('Backend fetch failed, using local clustering:', e);
-    }
-
     const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-    return {
-      clusters: [
-        {
-          clusterName: 'Media & Tech Artisans',
-          color: '#38bdf8',
-          count: volunteers.filter((v) => v.department?.includes('Media') || v.skills.includes('AV / Tech')).length || 2,
-          members: volunteers.map((v) => ({ id: v.id, name: v.name, department: v.department || 'Tech', points: v.points, x: 7.8, y: 2.1, z: 3.4 })),
-        },
-        {
-          clusterName: 'Hospitality & Pastoral Care',
-          color: '#fbbf24',
-          count: volunteers.filter((v) => v.department?.includes('Hospitality') || v.skills.includes('Hospitality')).length || 2,
-          members: volunteers.map((v) => ({ id: v.id, name: v.name, department: v.department || 'Hospitality', points: v.points, x: 2.1, y: 8.4, z: 2.2 })),
-        },
-        {
-          clusterName: 'Operations & Logistics Pillars',
-          color: '#34d399',
-          count: volunteers.filter((v) => v.department?.includes('Facilities') || v.skills.includes('Facilities & Setup')).length || 2,
-          members: volunteers.map((v) => ({ id: v.id, name: v.name, department: v.department || 'Operations', points: v.points, x: 2.5, y: 2.2, z: 7.9 })),
-        },
-      ],
-      silhouetteScore: 0.84,
-    };
+    const res = await fetch('/api/python/clustering', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ volunteers }),
+    });
+    if (!res.ok) throw new Error(`Python clustering request failed (${res.status})`);
+    const data = await res.json();
+    if (!data.clustering?.clusters) throw new Error('Python clustering returned an invalid response');
+    return data.clustering;
   },
 
   async fetchPythonAttendanceForecast(): Promise<PythonForecastResult | null> {
-    try {
-      const attendance = this.getAttendance();
-      const res = await fetch('/api/python/attendance-forecast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attendance }),
-      });
-      const data = await res.json();
-      if (data.forecast) return data.forecast;
-    } catch (e) {
-      console.warn('Backend fetch failed, using local forecast:', e);
-    }
-
-    return {
-      historicalAverage: 38.5,
-      momentum: 'Strong Upward',
-      forecast: [
-        { week: 'Next Sunday +1w', date: 'Upcoming Sun', projectedVolunteers: 42, lowerBound: 38, upperBound: 46, seasonalTrend: '+8.4% growth' },
-        { week: 'Next Sunday +2w', date: 'Following Sun', projectedVolunteers: 45, lowerBound: 40, upperBound: 49, seasonalTrend: '+7.1% growth' },
-        { week: 'Next Sunday +3w', date: 'Month Mid Sun', projectedVolunteers: 48, lowerBound: 42, upperBound: 53, seasonalTrend: '+6.2% growth' },
-        { week: 'Next Sunday +4w', date: 'Month End Sun', projectedVolunteers: 51, lowerBound: 45, upperBound: 56, seasonalTrend: '+5.8% growth' },
-      ],
-    };
+    const attendance = this.getAttendance();
+    const res = await fetch('/api/python/attendance-forecast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attendance }),
+    });
+    if (!res.ok) throw new Error(`Python forecast request failed (${res.status})`);
+    const data = await res.json();
+    if (!data.forecast) throw new Error('Python forecast returned an invalid response');
+    return data.forecast;
   },
 
   async fetchPythonTaskOptimization(): Promise<{ optimizedAssignments: PythonOptimizedAssignment[]; totalTasksOptimized: number; averageCompatibility: number }> {
-    try {
-      const openTasks = this.getTasks().filter((t) => t.status === 'open');
-      const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-      const res = await fetch('/api/python/optimize-tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks: openTasks, volunteers }),
-      });
-      const data = await res.json();
-      if (data.optimization && data.optimization.optimizedAssignments) return data.optimization;
-    } catch (e) {
-      console.warn('Backend fetch failed, using local Hungarian matcher:', e);
-    }
-
     const openTasks = this.getTasks().filter((t) => t.status === 'open');
     const volunteers = this.getUsers().filter((u) => u.role === 'volunteer');
-    const assignments: PythonOptimizedAssignment[] = [];
-
-    openTasks.forEach((task, idx) => {
-      const matchedVolunteer = volunteers[idx % volunteers.length] || volunteers[0];
-      if (matchedVolunteer) {
-        assignments.push({
-          taskId: task.id,
-          taskTitle: task.title,
-          category: task.category,
-          pointsValue: task.pointsValue,
-          matchedVolunteerId: matchedVolunteer.id,
-          matchedVolunteerName: matchedVolunteer.name,
-          compatibilityScore: 88 + (idx % 10),
-          reason: `High skill alignment with ${task.category} and optimal weekly workload capacity.`,
-        });
-      }
+    const res = await fetch('/api/python/optimize-tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: openTasks, volunteers }),
     });
-
-    return {
-      optimizedAssignments: assignments,
-      totalTasksOptimized: assignments.length,
-      averageCompatibility: 91.4,
-    };
+    if (!res.ok) throw new Error(`Python task optimization request failed (${res.status})`);
+    const data = await res.json();
+    if (!data.optimization?.optimizedAssignments) throw new Error('Python optimizer returned an invalid response');
+    return data.optimization;
   },
 
   async runPythonDataScript(code: string): Promise<{ success: boolean; output?: string; error?: string }> {
-    try {
-      const volunteers = this.getUsers();
-      const tasks = this.getTasks();
-      const res = await fetch('/api/python/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, volunteers, tasks }),
-      });
-      const data = await res.json();
-      if (data.output || data.success) return data;
-    } catch (e: any) {
-      console.warn('Python server runner unavailable, using sandbox output:', e);
-    }
-
-    // Local execution preview
-    const volunteers = this.getUsers();
-    const tasks = this.getTasks();
-    const avgPts = (volunteers.reduce((a, b) => a + (b.points || 0), 0) / (volunteers.length || 1)).toFixed(1);
-    return {
-      success: true,
-      output: `[Python 3.11 Runtime Simulation Output]\n>>> Volunteers Analyzed: ${volunteers.length}\n>>> Active Open Tasks: ${tasks.filter((t) => t.status === 'open').length}\n>>> Mean Service Points: ${avgPts} pts\n>>> Gini Workload Coefficient: 0.18 (Healthy Balance)\n>>> Task Completion Ratio: 94.2%\nExecution completed with returncode 0.`,
-    };
+    const res = await fetch('/api/python/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, volunteers: this.getUsers(), tasks: this.getTasks(), attendance: this.getAttendance() }),
+    });
+    if (!res.ok) throw new Error(`Python workbench request failed (${res.status})`);
+    return res.json();
   },
 
   async askGeminiRagAssistant(question: string, userContext: any): Promise<{ answer: string; retrievedDocuments: PythonRagDocument[]; modelUsed: string }> {
-    try {
-      const res = await fetch('/api/ai/ask-rag', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, userContext }),
-      });
-      const data = await res.json();
-      if (data.answer) return data;
-    } catch (e: any) {
-      console.warn('AI RAG server fetch error, falling back to local RAG:', e);
-    }
-
-    const docs = await this.fetchPythonRagSearch(question, 3);
-    let fallbackText = `Here is the official church procedure retrieved from the knowledge base:\n\n`;
-    if (docs.length > 0) {
-      fallbackText += `According to the "${docs[0].title}" (${docs[0].category}):\n"${docs[0].content}"\n\nAll volunteers are encouraged to coordinate with their team lead and maintain safety protocols throughout Sunday services.`;
-    } else {
-      fallbackText += `All church volunteers report to their ministry lead 30 minutes before service starts. Please ensure the two-adult rule and check-in procedures are followed.`;
-    }
-
-    return {
-      answer: fallbackText,
-      retrievedDocuments: docs,
-      modelUsed: 'Python RAG Semantic Vector Engine (Grounded)',
-    };
+    const res = await fetch('/api/ai/ask-rag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, userContext }),
+    });
+    if (!res.ok) throw new Error(`AI RAG request failed (${res.status})`);
+    const data = await res.json();
+    if (!data.answer) throw new Error('AI RAG returned an invalid response');
+    return data;
   },
 
-  resetToDefaultData() {
-    localStorage.removeItem(STORAGE_KEYS.USERS);
-    localStorage.removeItem(STORAGE_KEYS.TASKS);
-    localStorage.removeItem(STORAGE_KEYS.ATTENDANCE);
-    localStorage.removeItem(STORAGE_KEYS.SESSION);
-    localStorage.removeItem(STORAGE_KEYS.ANNOUNCEMENT);
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
-    localStorage.removeItem(STORAGE_KEYS.ORGANIZATION);
-
-    this.getUsers();
-    this.getTasks();
-    this.getAttendance();
-    this.getActiveSession();
-    this.getAnnouncement();
-    this.getOrganizationSettings();
-
-    notify('users', INITIAL_USERS);
-    notify('tasks', INITIAL_TASKS);
-    notify('attendance', INITIAL_ATTENDANCE);
-    notify('session', INITIAL_SESSION);
-    notify('announcement', INITIAL_ANNOUNCEMENT);
-    notify('organization', INITIAL_ORGANIZATION);
-    notify('leaderboard', this.getLeaderboard());
-  },
 };

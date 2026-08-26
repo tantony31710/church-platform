@@ -1,5 +1,7 @@
-import { onTaskQueuePolled } from 'firebase-functions/v2/tasks';
+import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
-export const onAsyncIngestion = onTaskQueuePolled(async (event) => {
-  console.log('Async ingestion triggered');
+export const onAsyncIngestion = onTaskDispatched(async (request) => {
+  console.log('Async ingestion triggered', {
+    payload: request.data || null,
+  });
 });

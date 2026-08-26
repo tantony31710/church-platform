@@ -7,7 +7,6 @@ import { auth, db } from '@/lib/firebase/client';
 import { Button, Card } from '@/components/ui/button';
 import { TiltCard } from '@/components/ui/tilt-card';
 import { UserPlus, Check, HeartHandshake, Sparkles } from 'lucide-react';
-import { DataService } from '@/lib/data-service';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 
@@ -49,30 +48,34 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, email, password || 'password123');
-        await setDoc(doc(db, 'users', cred.user.uid), {
-          name,
-          email,
-          role: 'volunteer',
-          skills: selectedSkills,
-          points: 15,
-        });
-      } catch (fbErr) {
-        console.warn('Firebase register bypassed to local state:', fbErr);
-      }
-
-      // Also register in local state immediately
-      const newUser = DataService.registerUser({
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await setDoc(doc(db, 'users', cred.user.uid), {
         name: name.trim(),
         email: email.trim(),
         role: 'volunteer',
         skills: selectedSkills,
-        points: 15, // Welcome bonus points
+        points: 0,
+        tasksCompletedCount: 0,
+        attendanceCount: 0,
+        streak: 0,
+        badges: ['New Member'],
+        joinedDate: new Date().toISOString(),
       });
 
-      setCustomUser(newUser);
-      showToast(`Welcome ${name}! You received +15 welcome points.`);
+      setCustomUser({
+        id: cred.user.uid,
+        name: name.trim(),
+        email: email.trim(),
+        role: 'volunteer',
+        skills: selectedSkills,
+        points: 0,
+        tasksCompletedCount: 0,
+        attendanceCount: 0,
+        streak: 0,
+        badges: ['New Member'],
+        joinedDate: new Date().toISOString(),
+      });
+      showToast(`Welcome ${name}! Your starting balance is 0 points. Complete verified tasks to earn points.`);
       navigate('/tasks');
     } catch (err) {
       console.error(err);
@@ -177,7 +180,7 @@ export default function RegisterPage() {
 
               <Button type="submit" disabled={loading} className="w-full font-bold mt-2">
                 <Sparkles className="h-4 w-4 mr-2" />
-                {loading ? 'Creating Profile...' : 'Complete Registration (+15 Welcome Pts)'}
+                {loading ? 'Creating Profile...' : 'Create Volunteer Account (0 Starting Points)'}
               </Button>
             </form>
 
