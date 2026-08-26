@@ -267,3 +267,73 @@ py -3.13 admin_bootstrap.py --list
 Confirm that the JSON’s `project_id` is the same project ID shown in the Firebase Console and the same value as `VITE_FIREBASE_PROJECT_ID` in the Vercel deployment. Keep the file out of Git; `.gitignore` already excludes `serviceAccountKey.json`. The updated bootstrap script now resolves the Firebase Auth account by UID instead of relying on a Firestore email query and returns a non-zero exit code when promotion fails.
 
 After a successful promotion, verify the Firebase Console user has the correct email and that the Firestore profile at `users/<Firebase Auth UID>` has `role: admin`. The custom claim is not displayed in the Firestore document; it is attached to the Firebase Auth user token. Sign out and back in on the deployed site to refresh it. If the Administrator tab still returns a normal login error, first confirm the Firebase Auth account exists, Email/Password sign-in is enabled, the password is correct, and the email has been verified. If login succeeds but admin screens are unavailable, refresh the token and check `ADMIN_EMAIL`/`VITE_ADMIN_EMAIL` for exact spelling and casing-insensitive equality.
+
+## 11. Exact Docker Compose and Cloud Build commands
+
+`docker-compose.yml` is intended for local production-like testing; Cloud Run deploys the image built by `Dockerfile`, not the Compose file. After creating `.env`, run the combined Express/Python service locally with:
+
+```bash
+docker compose up --build
+curl http://127.0.0.1:8080/api/health
+```
+
+The Compose file passes only `VITE_*` values as Docker build arguments. `ADMIN_EMAIL`, `FIREBASE_SERVICE_ACCOUNT`, and `GEMINI_API_KEY` are runtime environment values. The image listens on container port 8080 and is published locally on port 8080.
+
+For Cloud Build, enable Artifact Registry, Cloud Build, and Cloud Run, create the repository once, and submit the provided `cloudbuild.yaml` with public Vite substitutions:
+
+```bash
+gcloud config set project YOUR_PRODUCTION_PROJECT_ID
+gcloud artifacts repositories create churchconnect \
+  --repository-format=docker --location=REGION
+
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_REGION=REGION,_VITE_FIREBASE_API_KEY="$VITE_FIREBASE_API_KEY",_VITE_FIREBASE_APP_ID="$VITE_FIREBASE_APP_ID",_VITE_FIREBASE_AUTH_DOMAIN="$VITE_FIREBASE_AUTH_DOMAIN",_VITE_FIREBASE_MESSAGING_SENDER_ID="$VITE_FIREBASE_MESSAGING_SENDER_ID",_VITE_FIREBASE_PROJECT_ID="$VITE_FIREBASE_PROJECT_ID",_VITE_FIREBASE_STORAGE_BUCKET="$VITE_FIREBASE_STORAGE_BUCKET",_VITE_ADMIN_EMAIL="$ADMIN_EMAIL" .
+```
+
+Deploy the resulting image with Secret Manager bindings for the server-only values:
+
+```bash
+gcloud run deploy churchconnect-api \
+  --image REGION-docker.pkg.dev/YOUR_PRODUCTION_PROJECT_ID/churchconnect/api:latest \
+  --region REGION \
+  --set-env-vars ADMIN_EMAIL="$ADMIN_EMAIL" \
+  --set-secrets FIREBASE_SERVICE_ACCOUNT=churchconnect-firebase-admin:latest,GEMINI_API_KEY=churchconnect-gemini-key:latest \
+  --allow-unauthenticated
+```
+
+## 12. Local RAG/Gemini smoke test
+
+Create a dedicated Firebase Auth test account. Do not use a real user password in scripts or shell history. Start the app with `npm run dev`, then set the test credentials only in the current terminal session:
+
+```bash
+export VITE_FIREBASE_API_KEY='your-web-api-key'
+export TEST_FIREBASE_EMAIL='rag-test@example.com'
+export TEST_FIREBASE_PASSWORD='use-a-dedicated-test-password'
+python3 scripts/test_rag_local.py "What is the volunteer check-in process?"
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:VITE_FIREBASE_API_KEY = "your-web-api-key"
+$env:TEST_FIREBASE_EMAIL = "rag-test@example.com"
+$env:TEST_FIREBASE_PASSWORD = "use-a-dedicated-test-password"
+py -3.13 scripts/test_rag_local.py "What is the volunteer check-in process?"
+```
+
+The test signs in through Firebase Auth, obtains a short-lived ID token, calls `/api/ai/ask-rag`, and prints the HTTP status, selected model, retrieved-document count, and answer. `modelUsed` will identify Gemini when `GEMINI_API_KEY` is loaded, or the deterministic local RAG engine when Gemini is intentionally absent.
+
+## 13. Verify a production point award
+
+After a real task is completed, obtain the task ID and the assignee’s Firebase Auth UID from the Firebase Console or the application. Use a service-account file from the same project and run:
+
+```powershell
+$env:FIREBASE_SERVICE_ACCOUNT_PATH = ".\serviceAccountKey.json"
+py -3.13 scripts/verify_points.py \
+  --task-id TASK_DOCUMENT_ID \
+  --user-id FIREBASE_AUTH_UID \
+  --expected-points EXPECTED_TOTAL_POINTS \
+  --expected-completed-count EXPECTED_COMPLETED_TASK_COUNT
+```
+
+The script is read-only. It prints the task status, assignee, task point value, volunteer points, and completed-task count, then exits successfully only when the task is completed, assigned to the requested UID, and the optional expected totals match. It does not award or modify points.
