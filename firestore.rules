@@ -128,5 +128,10 @@ service cloud.firestore {
     match /model_benchmarks/{benchmarkId} {
       allow read, write: if isAdmin();
     }
+
+    // Optional administrator-only operational documents.
+    match /admin-data/{docId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

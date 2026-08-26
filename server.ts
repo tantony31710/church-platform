@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
 import { spawn } from 'child_process';
@@ -149,6 +150,7 @@ app.get('/api/health', (_req, res) => {
     pythonReady: true,
     apiAuthRequired: true,
     adminConfigured: Boolean(process.env.ADMIN_EMAIL),
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
   });
 });
 

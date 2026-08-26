@@ -207,3 +207,46 @@ gcloud run deploy churchconnect-api \
 `--allow-unauthenticated` applies to the HTTPS transport only; every `/api` handler still requires a Firebase ID token, and sensitive endpoints additionally require the designated email, verified-email state, custom admin claim, and Firestore admin role. If you prefer a private Cloud Run service, put an authenticated gateway in front of it and keep the same application-level token checks.
 
 After deployment, configure the Vite host to route `/api/*` to the Cloud Run URL. Do not put `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PRIVATE_KEY`, or `GEMINI_API_KEY` in `VITE_*` variables because Vite exposes `VITE_*` values to browsers.
+
+## 9. Configure and test Gemini locally
+
+Gemini is optional for retrieval. The Python `rag-search` action can return matching church knowledge documents without a model key. When `GEMINI_API_KEY` is present, `/api/ai/ask-rag` uses Gemini to turn the retrieved documents into a concise answer. The browser never receives the key.
+
+Create the local environment file and fill the values:
+
+```bash
+cp .env.example .env
+```
+
+Use this separation:
+
+```dotenv
+# Public Firebase browser configuration; these are safe to embed in the frontend.
+VITE_FIREBASE_API_KEY=your-firebase-web-api-key
+VITE_FIREBASE_APP_ID=your-firebase-app-id
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+VITE_ADMIN_EMAIL=your-real-admin-email@example.com
+
+# Server-only values; never prefix these with VITE_.
+ADMIN_EMAIL=your-real-admin-email@example.com
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+The service-account JSON must be one-line valid JSON if placed in `FIREBASE_SERVICE_ACCOUNT`. Alternatively leave it blank and provide `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. The `dotenv` package loads `.env` when `npm run dev` starts.
+
+Start the application and check the non-secret status fields:
+
+```bash
+npm run dev
+curl http://127.0.0.1:3000/api/health
+```
+
+With all server values present, the response includes `pythonReady: true`, `adminConfigured: true`, and `geminiConfigured: true`. A `401` from a protected RAG route without an `Authorization: Bearer <Firebase ID token>` header is expected.
+
+To test the feature in the browser, open the local application, sign in with a Firebase Auth account, open **Insights → Python RAG & SOP AI**, ask a question covered by the church knowledge documents, and confirm that the answer includes retrieved-document context. The RAG route uses the signed-in Firebase session automatically. If Gemini is absent, the UI should still show the deterministic local retrieval answer; if the server is not configured, it should show an explicit API error rather than sample output.
+
+For Vercel, add the six `VITE_FIREBASE_*` variables and `VITE_ADMIN_EMAIL` to the project’s Production environment, then redeploy. Do not add `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_PRIVATE_KEY`, `ADMIN_EMAIL`, or `GEMINI_API_KEY` to Vercel unless Vercel is also running the protected Express API. In the recommended architecture, those server-only values belong in the Cloud Run service’s Secret Manager bindings, while Vercel hosts the static client and proxies `/api/*` to Cloud Run.
