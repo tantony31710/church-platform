@@ -21,6 +21,7 @@ This review covers the browser authentication flow, Firestore rules, Express API
 | Python execution | Workbench code is length-limited, blocks dunder access and dangerous builtins, and allows only `json`, `math`, and `collections` imports | Implemented |
 | Secret handling | Admin credentials and Gemini keys are server-only; only Firebase browser configuration and the designated email use `VITE_*` variables | Implemented |
 | Deployment runtime | Dockerfile provides Node 20 and Python 3 for the combined Express/Python service | Implemented |
+| Dependency remediation | React Router upgraded to 7.18.2; production audit has no high/critical issues and one moderate optional/transitive `uuid` advisory through Firebase Admin storage dependencies | Reviewed |
 
 ## Verification performed
 
@@ -46,3 +47,5 @@ The application is code-ready but cannot identify the real administrator until `
 The current in-memory rate limiter is appropriate for a single Cloud Run instance but is not globally coordinated across multiple replicas. If the API is scaled horizontally or placed behind a public gateway, add a gateway-level quota or a shared rate-limit store. Cloud Run deployment should route `/api/*` to the Express service and should not expose Admin SDK credentials or Gemini keys to the Vite client.
 
 The Python workbench is constrained but remains an administrator-only feature. Keep the allow-list narrow, review new imports before permitting them, and treat all analyst output as operational decision support rather than an automated pastoral or safeguarding decision.
+
+The latest `pnpm audit --prod` result is **0 high, 0 critical, and 1 moderate**. The remaining issue is `uuid@9.0.1` reached through optional Firebase Admin/Google Cloud Storage dependencies; it is not a direct application dependency. The Firebase CLI also brings development-only deprecated packages and vulnerabilities, but those are excluded from the production Docker runtime with `npm install --omit=dev`. Do not run `npm audit fix --force` blindly; review major upgrades and retest Firebase Functions first.
