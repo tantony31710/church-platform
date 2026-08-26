@@ -32,6 +32,10 @@ import argparse
 import firebase_admin
 from firebase_admin import credentials, firestore, auth as firebase_auth
 
+# Prevent re-initialization errors
+if not firebase_admin._apps:
+    cred = credentials.Certificate("serviceAccountKey.json") # or credentials.ApplicationDefault()
+    firebase_admin.initialize_app(cred)
 
 def init_firebase():
     """Initialize Admin SDK for the intended Firebase project.

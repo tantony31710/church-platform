@@ -6,3 +6,5 @@ serviceAccountKey.json
 functions/node_modules/
 functions/lib/
 *.log
+.DS_Store
+.vscode/
