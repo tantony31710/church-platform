@@ -626,3 +626,65 @@ python scripts/test_python_service.py
 ```
 
 The test suite covers the unauthenticated health response, grounded RAG fallback, administrator workbench execution, non-admin denial, all live-data ML/optimization routes, and the three-domain analytics report. If production logs show a Gemini 404, inspect `GEMINI_MODEL` first; the service default is `gemini-3.7-flash`, and an explicitly configured model must be available to the deployed API key. Production data is read from Firestore; test fixtures exist only to validate the HTTP and authorization contract.
+
+
+## Development roster and RAG corpus management
+
+The development fixture loader is `scripts/seed_dev_firestore.py`. It creates deterministic, clearly labeled records in `users`, `tasks`, `attendance`, `rosters`, `roster_members`, and `knowledge_documents`. It never creates Firebase Auth users and never writes real children’s personal data. The script refuses the production project `church-platform-36107` unless the Firestore emulator is explicitly active.
+
+Run it against the emulator from PowerShell:
+
+```powershell
+Set-Location "C:\Users\LAP ME\Documents\Programming\Anton projects\church-platform"
+
+npx firebase emulators:exec `
+  --only firestore `
+  --project church-platform-dev `
+  "python3 scripts/seed_dev_firestore.py --project-id church-platform-dev"
+```
+
+To reset only records whose IDs begin with `dev_fixture_`, use the explicit confirmation flag:
+
+```powershell
+npx firebase emulators:exec `
+  --only firestore `
+  --project church-platform-dev `
+  "python3 scripts/seed_dev_firestore.py --project-id church-platform-dev --reset --yes"
+```
+
+To load the same fixtures into a separate Firebase development project, download a service-account file for that development project and run:
+
+```powershell
+$env:FIRESTORE_EMULATOR_HOST = ""
+
+py -3.13 .\scripts\seed_dev_firestore.py `
+  --project-id "church-platform-dev" `
+  --service-account ".\serviceAccount-dev.json"
+```
+
+Never substitute `church-platform-36107` for the development project ID. Keep the development Vercel Preview environment connected to the development Firebase configuration, not Production.
+
+The Admin page now includes **Roster & RAG Data**. It reads and writes live Firestore records through `src/lib/admin-data-service.ts` and `src/components/admin/knowledge-roster-manager.tsx`. The following collections are administrator-only:
+
+```text
+rosters/{rosterId}
+roster_members/{memberId}
+knowledge_documents/{documentId}
+```
+
+The Firestore rules require a signed-in user with the verified-email custom claim and matching `users/{Auth UID}.role == "admin"`. Volunteers cannot read or write these collections. Changes are visible through Firestore subscriptions and are available to the live analytics workflows; no browser-only seed state is used after live synchronization starts.
+
+For development, deploy the rules to the development project first:
+
+```powershell
+npx firebase-tools use church-platform-dev
+npx firebase-tools deploy --project church-platform-dev --only firestore:rules
+```
+
+Keep production deployment separate:
+
+```powershell
+npx firebase-tools use church-platform-36107
+```
+
+The seeded records carry `environment: "development"` and `fixture: true`, so downstream reports can filter them explicitly when a development result must not be presented as ministry production data.

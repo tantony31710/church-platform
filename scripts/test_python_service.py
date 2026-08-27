@@ -85,6 +85,7 @@ def test_health_does_not_require_firebase_credentials() -> None:
 
 def test_rag_returns_grounded_fallback_without_gemini(monkeypatch) -> None:
     monkeypatch.setattr(service, "_gemini", lambda: None)
+    monkeypatch.setattr(service, "_rag_corpus", lambda: service.MINISTRY_KNOWLEDGE_BASE)
     service.app.dependency_overrides[service.current_user] = lambda: {"uid": "volunteer-1"}
     try:
         response = client.post("/api/python/rag-query", json={"query": "two adult childcare safety rule"})
@@ -106,6 +107,7 @@ def test_rag_falls_back_from_unavailable_configured_model(monkeypatch) -> None:
 
     monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
     monkeypatch.setattr(service, "_gemini", lambda: SimpleNamespace(models=FakeModels()))
+    monkeypatch.setattr(service, "_rag_corpus", lambda: service.MINISTRY_KNOWLEDGE_BASE)
     service.app.dependency_overrides[service.current_user] = lambda: {"uid": "admin-1"}
     try:
         response = client.post("/api/ai/ask-rag", json={"question": "What is the two-adult rule?"})
@@ -125,6 +127,7 @@ def test_rag_returns_grounded_fallback_on_gemini_outage(monkeypatch) -> None:
 
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
     monkeypatch.setattr(service, "_gemini", lambda: SimpleNamespace(models=UnavailableModels()))
+    monkeypatch.setattr(service, "_rag_corpus", lambda: service.MINISTRY_KNOWLEDGE_BASE)
     service.app.dependency_overrides[service.current_user] = lambda: {"uid": "admin-1"}
     try:
         response = client.post("/api/ai/ask-rag", json={"question": "What is the two-adult rule?"})
@@ -137,6 +140,38 @@ def test_rag_returns_grounded_fallback_on_gemini_outage(monkeypatch) -> None:
     assert body["modelUsed"] == "python-rag-retrieval-fallback"
     assert body["retrievedDocuments"]
     assert "Grounded policy documents retrieved" in body["answer"]
+
+
+def test_rag_includes_active_managed_firestore_document(monkeypatch) -> None:
+    class FakeDocument:
+        id = "dev_fixture_knowledge_test"
+
+        def to_dict(self):
+            return {
+                "title": "Development classroom handoff",
+                "category": "Classroom",
+                "content": "Teachers record the classroom handoff before releasing the room.",
+                "tags": ["classroom", "handoff"],
+                "active": True,
+            }
+
+    class FakeCollection:
+        def stream(self):
+            return [FakeDocument()]
+
+    class FakeFirestore:
+        def collection(self, name):
+            assert name == "knowledge_documents"
+            return FakeCollection()
+
+    monkeypatch.setattr(service, "_firebase", lambda: (object(), FakeFirestore()))
+    service.app.dependency_overrides[service.current_user] = lambda: {"uid": "volunteer-1"}
+    try:
+        response = client.post("/api/python/rag-query", json={"query": "classroom handoff"})
+    finally:
+        service.app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["results"][0]["id"] == "dev_fixture_knowledge_test"
 
 
 def test_workbench_requires_designated_admin() -> None:

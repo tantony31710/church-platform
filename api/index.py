@@ -30,6 +30,7 @@ from firebase_admin import credentials, firestore
 
 from engine.analytics_pipeline import summarize_dataset
 from engine.python_engine import (
+    MINISTRY_KNOWLEDGE_BASE,
     calculate_churn_predictions,
     calculate_volunteer_clusters,
     compute_rag_search,
@@ -117,6 +118,21 @@ def _live_dataset() -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _rag_corpus() -> list[dict[str, Any]]:
+    """Merge active Firestore-managed documents with the built-in SOP corpus."""
+    _, client = _firebase()
+    managed: list[dict[str, Any]] = []
+    for item in client.collection("knowledge_documents").stream():
+        record = _record(item)
+        if record.get("active", True) is False:
+            continue
+        if not str(record.get("title", "")).strip() or not str(record.get("content", "")).strip():
+            continue
+        record["tags"] = record.get("tags") if isinstance(record.get("tags"), list) else []
+        managed.append(record)
+    return [*MINISTRY_KNOWLEDGE_BASE, *managed]
+
+
 def _verify_user(credentials_value: HTTPAuthorizationCredentials | None) -> dict[str, Any]:
     if credentials_value is None or credentials_value.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase ID token required.")
@@ -184,7 +200,7 @@ def rag_query(payload: dict[str, Any], _: dict[str, Any] = Depends(current_user)
     if not query:
         raise HTTPException(status_code=400, detail="A non-empty query is required.")
     top_k = max(1, min(5, int(payload.get("top_k", 3))))
-    return {"success": True, "query": query, "results": compute_rag_search(query, top_k)}
+    return {"success": True, "query": query, "results": compute_rag_search(query, top_k, _rag_corpus())}
 
 
 @app.post("/api/ai/ask-rag")
@@ -194,7 +210,7 @@ def ask_rag(payload: dict[str, Any], _: dict[str, Any] = Depends(current_user)) 
     if not question:
         raise HTTPException(status_code=400, detail="Question is required.")
 
-    matched = compute_rag_search(question, 3)
+    matched = compute_rag_search(question, 3, _rag_corpus())
     context = "\n\n".join(
         f"[Source {index}: {doc['title']} ({doc['category']})]\n{doc['content']}"
         for index, doc in enumerate(matched, start=1)

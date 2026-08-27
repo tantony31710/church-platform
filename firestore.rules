@@ -125,6 +125,22 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---- managed development rosters --------------------------------
+    // Roster and knowledge records are administrator-managed operational data.
+    // They are intentionally separate from users/tasks/attendance so fixture
+    // records can be isolated and removed without changing production users.
+    match /rosters/{rosterId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /roster_members/{memberId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /knowledge_documents/{documentId} {
+      allow read, write: if isAdmin();
+    }
+
     // ---- model_benchmarks -------------------------------------------
     match /model_benchmarks/{benchmarkId} {
       allow read, write: if isAdmin();

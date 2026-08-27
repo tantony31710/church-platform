@@ -94,24 +94,25 @@ def tokenize(text):
     """Normalize and tokenize text into lowercase word tokens."""
     return re.findall(r'[a-z0-9]+', text.lower())
 
-def compute_rag_search(query, top_k=3):
-    """BM25 / TF-IDF style semantic vector retrieval for RAG."""
+def compute_rag_search(query, top_k=3, corpus=None):
+    """BM25 / TF-IDF style retrieval over the built-in or injected corpus."""
+    corpus = corpus if corpus is not None else MINISTRY_KNOWLEDGE_BASE
     query_tokens = tokenize(query)
     if not query_tokens:
         return []
 
     # Compute IDF over corpus
-    doc_count = len(MINISTRY_KNOWLEDGE_BASE)
+    doc_count = len(corpus)
     doc_freqs = defaultdict(int)
-    for doc in MINISTRY_KNOWLEDGE_BASE:
-        full_text = f"{doc['title']} {doc['category']} {doc['content']} {' '.join(doc['tags'])}"
+    for doc in corpus:
+        full_text = f"{doc['title']} {doc['category']} {doc['content']} {' '.join(doc.get('tags', []))}"
         unique_tokens = set(tokenize(full_text))
         for t in unique_tokens:
             doc_freqs[t] += 1
 
     scores = []
-    for doc in MINISTRY_KNOWLEDGE_BASE:
-        full_text = f"{doc['title']} {doc['category']} {doc['content']} {' '.join(doc['tags'])}"
+    for doc in corpus:
+        full_text = f"{doc['title']} {doc['category']} {doc['content']} {' '.join(doc.get('tags', []))}"
         doc_tokens = tokenize(full_text)
         token_counts = Counter(doc_tokens)
         doc_len = len(doc_tokens) or 1
@@ -130,7 +131,7 @@ def compute_rag_search(query, top_k=3):
 
         # Keyword booster on tags and title
         for qt in query_tokens:
-            if qt in [t.lower() for t in doc['tags']]:
+            if qt in [t.lower() for t in doc.get('tags', [])]:
                 score += 1.5
             if qt in doc['title'].lower():
                 score += 2.0

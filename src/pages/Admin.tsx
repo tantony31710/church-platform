@@ -5,6 +5,7 @@ import { TaskForm } from '@/components/admin/task-form';
 import { TaskManager } from '@/components/admin/task-manager';
 import { VolunteerManager } from '@/components/admin/volunteer-manager';
 import { ChurchSettingsManager } from '@/components/admin/church-settings';
+import { KnowledgeRosterManager } from '@/components/admin/knowledge-roster-manager';
 import { DataService } from '@/lib/data-service';
 import { useToast } from '@/lib/toast-context';
 import { Button, Card } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import {
   Settings
 } from 'lucide-react';
 
-type Tab = 'organization' | 'tasks' | 'volunteers' | 'announcements' | 'data-tools';
+type Tab = 'organization' | 'tasks' | 'volunteers' | 'announcements' | 'data-tools' | 'data-management';
 
 export default function AdminPage() {
   const { role, profile } = useAuth();
@@ -123,6 +124,16 @@ export default function AdminPage() {
           >
             <Database className="h-3.5 w-3.5" />
             <span>Live Data & AI</span>
+          </button>
+
+          <button
+            onClick={() => setTab('data-management')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'data-management' ? 'bg-glow/20 text-glow' : 'text-foreground/60 hover:text-foreground'
+            }`}
+          >
+            <Users className="h-3.5 w-3.5" />
+            <span>Roster & RAG Data</span>
           </button>
         </div>
       </div>
@@ -249,6 +260,20 @@ export default function AdminPage() {
               Open AI & Insights
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Tab 5: Live roster and RAG management */}
+      {tab === 'data-management' && (
+        <div className="glass-strong rounded-2xl border border-border-strong p-6 shadow-xl">
+          <div className="mb-5 flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-emerald-400" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">Live Roster & Knowledge Management</h2>
+              <p className="text-xs text-foreground/55">Administrator-only Firestore records. Changes are immediately available to the roster and AI workflows.</p>
+            </div>
+          </div>
+          <KnowledgeRosterManager />
         </div>
       )}
     </div>

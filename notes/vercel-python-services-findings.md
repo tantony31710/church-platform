@@ -41,3 +41,9 @@ Implementation implication: a raw `api/index.py` with the current CLI engine is 
 Source: https://ai.google.dev/gemini-api/docs/models
 
 The current Gemini API model page lists Gemini 3.7 Flash as available and labels older model families such as Gemini 2.0 Flash as shut down. The production Vercel runtime log for `/api/ai/ask-rag` showed a 404 for `gemini-2.5-flash`. The service should therefore default to the currently available `gemini-3.7-flash`, while allowing `GEMINI_MODEL` to override it for a model enabled for the user’s API key.
+
+## Live RAG verification
+
+The production administrator session on `https://church-platform-zeta.vercel.app/insights` resolves as ADMIN and the dashboard loads all Python sections. The first RAG request on deployment `dpl_BMSTwEoFh3qaarVBALgvNk5b2Q9z` returned 502 because the Vercel environment override `GEMINI_MODEL=gemini-2.5-flash` produced a Gemini 404. After commit `a98c2f0` defaulted to `gemini-3.7-flash`, the same deployment still attempted the explicit 2.5 model, then tried 3.7 and received 503 Service Unavailable. Commit `4c4ced2` added one-time model fallback plus a grounded retrieval-only response for transient Gemini outages. Deployment `dpl_AfsFCUi9oETxAJ79k4w4i5N23iL6` reached READY. A fresh RAG request was submitted on the production alias; the UI result should be checked against the latest runtime log to confirm the grounded fallback.
+
+The current live Firestore data has one administrator and zero volunteers, zero open tasks, and zero completed tasks. The ML churn endpoint therefore correctly returns no volunteer prediction rows until real volunteer data exists.
