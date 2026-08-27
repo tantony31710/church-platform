@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "firebase:emulators": "firebase emulators:start --only firestore,functions --project church-platform-local",
     "test:points:emulator": "GCLOUD_PROJECT=church-platform-local FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx scripts/test-points-emulator.ts",
-    "test:rules:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_EMULATOR_HUB=127.0.0.1:4400 tsx scripts/test-firestore-rules.ts"
+    "test:rules:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_EMULATOR_HUB=127.0.0.1:4400 tsx scripts/test-firestore-rules.ts",
+    "test:admin:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_EMULATOR_HUB=127.0.0.1:4400 tsx scripts/test-admin-role-emulator.ts"
   },
   "dependencies": {
     "@google/genai": "^2.18.0",

@@ -485,3 +485,67 @@ The administrator redirect and role resolution are intentionally split across a 
 | `firestore.rules` | Server-enforced claim/profile checks and protected role/points writes |
 
 The role is considered administrator only when the email is approved, verified, has the custom claim, and has the Firestore role. A Firestore `role: admin` field by itself is deliberately insufficient.
+
+## 19. Safely adding a secondary administrator
+
+A secondary administrator must be a separate Firebase Authentication user whose email address is explicitly approved. The project operator account used for Firebase Console or Firebase CLI does not automatically become an application administrator.
+
+First create the second person’s Auth account in **Authentication → Users → Add user**, or have the person register through the application. Use an email address whose mailbox they control, and have them complete email verification before granting administrator access. Do not share passwords or service-account files.
+
+Add the normalized email to the approved lists. For a local bootstrap session in PowerShell:
+
+```powershell
+Set-Location "C:\Users\LAP ME\Documents\Programming\Anton projects\church-platform"
+
+$env:ADMIN_EMAILS = "tantony31710@gmail.com,second-admin@example.com"
+$env:FIREBASE_SERVICE_ACCOUNT_PATH = "$PWD\serviceAccountKey.json"
+
+py -3.13 .\admin_bootstrap.py `
+  --email "second-admin@example.com" `
+  --promote
+```
+
+The same comma-separated list must be configured as the Production Vercel build variable:
+
+```text
+VITE_ADMIN_EMAILS=tantony31710@gmail.com,second-admin@example.com
+```
+
+If the Express/Python API is deployed separately, configure its server-only variable with the same list:
+
+```text
+ADMIN_EMAILS=tantony31710@gmail.com,second-admin@example.com
+```
+
+Redeploy Vercel after changing `VITE_ADMIN_EMAILS`, because Vite embeds public variables during the build. Redeploy the API revision after changing `ADMIN_EMAILS`. Then run the read-only checker for each approved address:
+
+```powershell
+.\scripts\Test-AdminConsistency.ps1 -Email "second-admin@example.com"
+```
+
+The bootstrap resolves the Auth user by email and writes the role to the exact `users/<Auth UID>` document. It also assigns the Auth custom claim. It does not authorize arbitrary emails, and a client cannot grant itself a role. If an approved email has no Auth account or no matching profile, promotion fails rather than guessing a UID.
+
+## 20. Firestore administrator collection policy
+
+Firestore rules are a second, server-enforced boundary. A browser is authorized as an administrator only when the signed-in token contains `admin: true`, the token contains `email_verified: true`, and the matching `users/<Auth UID>` document has `role: 'admin'`.
+
+| Collection | Volunteer access | Administrator access | Client writes |
+|---|---|---|---|
+| `admin-data/{docId}` | None | Read and write | Admin only |
+| `model_benchmarks/{benchmarkId}` | None | Read and write | Admin only |
+| `settings/{settingId}` | Read | Read and write | Admin only for writes |
+| `leaderboard/{userId}` | Read | Read | No client writes; trusted Functions/Admin SDK only |
+| `users/{userId}` | Read/update own safe fields | Read roster; no role/points updates | Role, points, counters, and badges are not client-writable |
+| `tasks/{taskId}` | Read; constrained claim/complete changes | Read, create, update, delete | Validated by role and field-diff rules |
+
+The approved email list is intentionally enforced in the client login gate, the trusted bootstrap, and the server API. Firestore rules cannot safely contain a deploy-time email allowlist. The rules instead enforce the durable Auth claim, verification state, and same-UID Firestore role. This means a stale client configuration cannot grant access, and a role field without the Auth claim is insufficient.
+
+The emulator test covers an approved primary administrator, an approved secondary administrator, an unverified account, an account without the admin claim, and an account whose profile role is `volunteer`. Run it with:
+
+```powershell
+$env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"
+$env:FIREBASE_EMULATOR_HUB = "127.0.0.1:4400"
+pnpm run test:admin:emulator
+```
+
+The rule test must remain part of release validation whenever `firestore.rules`, the Auth claim model, or administrator collections change.

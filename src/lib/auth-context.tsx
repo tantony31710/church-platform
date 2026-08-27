@@ -4,6 +4,7 @@ import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { auth, db, firebaseConfigured } from '@/lib/firebase/client';
 import { DataService } from '@/lib/data-service';
 import type { Role, UserProfile } from '@/lib/types';
+import { normalizeAdminEmails, resolveEffectiveRole } from '@/lib/admin-role';
 
 interface AuthContextValue {
   user: User | null;
@@ -27,12 +28,9 @@ const AuthContext = createContext<AuthContextValue>({
   updateCurrentProfile: () => {},
 });
 
-const designatedAdminEmails = String(
-  import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ADMIN_EMAIL || '',
-)
-  .split(',')
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
+const designatedAdminEmails = normalizeAdminEmails(
+  import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ADMIN_EMAIL,
+);
 
 function profileFromFirestore(firebaseUser: User, value: Record<string, any>, effectiveRole?: Role): UserProfile {
   return {
@@ -98,13 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('[Auth] Could not verify Firebase claims:', error);
           }
 
-            const isDesignatedAdmin = Boolean(
-              nextUser.email && designatedAdminEmails.includes(nextUser.email.trim().toLowerCase())
-            );
-          const effectiveRole: Role =
-            isDesignatedAdmin && nextUser.emailVerified && hasAdminClaim && snapshot.data().role === 'admin'
-              ? 'admin'
-              : 'volunteer';
+          const effectiveRole: Role = resolveEffectiveRole({
+            email: nextUser.email,
+            emailVerified: nextUser.emailVerified,
+            claims: { admin: hasAdminClaim },
+            profileRole: snapshot.data().role,
+            allowedEmails: designatedAdminEmails,
+          });
           const nextProfile = profileFromFirestore(nextUser, snapshot.data(), effectiveRole);
           DataService.startLiveSync(nextUser.uid, effectiveRole === 'admin');
           setProfile(nextProfile);

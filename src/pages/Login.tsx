@@ -7,15 +7,13 @@ import { Button, Card } from '@/components/ui/button';
 import { TiltCard } from '@/components/ui/tilt-card';
 import { HeartHandshake, ShieldCheck, Users } from 'lucide-react';
 import { useToast } from '@/lib/toast-context';
+import { normalizeAdminEmails } from '@/lib/admin-role';
 
 type LoginMode = 'volunteer' | 'admin';
 
-const designatedAdminEmails = String(
-  import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ADMIN_EMAIL || '',
-)
-  .split(',')
-  .map((value) => value.trim().toLowerCase())
-  .filter(Boolean);
+const designatedAdminEmails = normalizeAdminEmails(
+  import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ADMIN_EMAIL,
+);
 
 export default function LoginPage() {
   const navigate = useNavigate();
