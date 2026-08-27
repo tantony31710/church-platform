@@ -616,7 +616,7 @@ GEMINI_API_KEY=<server secret>
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Do not commit `.env.local`, service-account JSON, Gemini keys, or Firebase Admin private keys. The Vercel service configuration is defined in `vercel.json`; the frontend service handles non-API paths and the Python service handles `/api/*`.
+Do not commit `.env.local`, service-account JSON, Gemini keys, or Firebase Admin private keys. The Vercel service configuration is defined in `vercel.json`. Each service declares its framework explicitly—`vite` for the frontend and `fastapi` for the Python backend—so the root-level Express entrypoint is not selected accidentally. The frontend service handles non-API paths and the Python service handles `/api/*`.
 
 For local Python-service contract tests, install `api/requirements.txt` and run:
 
