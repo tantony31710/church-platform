@@ -121,8 +121,14 @@ def _verify_user(credentials_value: HTTPAuthorizationCredentials | None) -> dict
     if credentials_value is None or credentials_value.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase ID token required.")
     try:
-        return firebase_auth.verify_id_token(credentials_value.credentials)
+        firebase_app, _ = _firebase()
     except Exception as error:
+        print(f"[Python auth] Firebase Admin initialization failed: {type(error).__name__}: {error}", file=sys.stderr)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Server Firebase Admin credentials are not configured.") from error
+    try:
+        return firebase_auth.verify_id_token(credentials_value.credentials, app=firebase_app)
+    except Exception as error:
+        print(f"[Python auth] Firebase ID token verification failed: {type(error).__name__}: {error}", file=sys.stderr)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Firebase ID token.") from error
 
 

@@ -58,6 +58,24 @@ def admin_user() -> dict[str, object]:
     }
 
 
+def test_token_verifier_uses_initialized_firebase_app(monkeypatch) -> None:
+    expected_app = object()
+    monkeypatch.setattr(service, "_firebase", lambda: (expected_app, object()))
+    observed: dict[str, object] = {}
+
+    def verify(token: str, app: object) -> dict[str, object]:
+        observed["token"] = token
+        observed["app"] = app
+        return {"uid": "admin-1"}
+
+    monkeypatch.setattr(service.firebase_auth, "verify_id_token", verify)
+    result = service._verify_user(
+        service.HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-id-token")
+    )
+    assert result["uid"] == "admin-1"
+    assert observed == {"token": "test-id-token", "app": expected_app}
+
+
 def test_health_does_not_require_firebase_credentials() -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
