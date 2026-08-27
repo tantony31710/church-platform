@@ -70,8 +70,10 @@ export function KnowledgeRosterManager() {
   const removeRoster = async (roster: ManagedRoster) => {
     if (!window.confirm(`Delete the roster “${roster.name}”?`)) return;
     try {
+      const rosterMembers = members.filter((member) => member.rosterId === roster.id);
+      await Promise.all(rosterMembers.map((member) => AdminDataService.deleteRosterMember(member.id)));
       await AdminDataService.deleteRoster(roster.id);
-      showToast('Roster deleted.');
+      showToast('Roster and its members deleted.');
     } catch (problem) {
       showToast(problem instanceof Error ? problem.message : 'Roster deletion failed.');
     }
@@ -141,7 +143,7 @@ export function KnowledgeRosterManager() {
             {rosters.map((roster) => <div key={roster.id} className={`flex items-center justify-between rounded-xl border p-3 ${selectedRoster?.id === roster.id ? 'border-glow/60 bg-glow/10' : 'border-border bg-white/[0.02]'}`}><button className="min-w-0 flex-1 text-left" onClick={() => setSelectedRosterId(roster.id)}><p className="truncate text-sm font-semibold">{roster.name}</p><p className="text-[11px] text-foreground/55">{roster.type === 'children' ? 'Teacher roster' : 'Pastor roster'} · {members.filter((member) => member.rosterId === roster.id).length} members</p></button><button aria-label={`Delete ${roster.name}`} className="ml-2 rounded-lg p-2 text-red-300 hover:bg-red-500/10" onClick={() => removeRoster(roster)}><Trash2 className="h-4 w-4" /></button></div>)}
             {!rosters.length && <p className="rounded-xl border border-dashed border-border p-4 text-xs text-foreground/50">No rosters yet. Add one above or run the development seeder.</p>}
           </div>
-          {selectedRoster && <div className="mt-5 border-t border-border pt-4"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-foreground/60">Members in {selectedRoster.name}</p><div className="grid gap-2 sm:grid-cols-[1fr_140px_auto]"><input className={fieldClass} value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder={selectedRoster.type === 'children' ? 'Fictional child label' : 'Volunteer name'} /><input className={fieldClass} value={memberAgeBand} onChange={(event) => setMemberAgeBand(event.target.value)} placeholder={selectedRoster.type === 'children' ? 'Age band' : 'Optional note'} /><Button variant="outline" onClick={saveMember} disabled={saving}>Add member</Button></div><div className="mt-3 flex flex-wrap gap-2">{selectedMembers.map((member) => <span key={member.id} className="rounded-full border border-border bg-white/5 px-3 py-1 text-xs">{member.displayName}</span>)}</div></div>}
+          {selectedRoster && <div className="mt-5 border-t border-border pt-4"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-foreground/60">Members in {selectedRoster.name}</p><div className="grid gap-2 sm:grid-cols-[1fr_140px_auto]"><input className={fieldClass} value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder={selectedRoster.type === 'children' ? 'Fictional child label' : 'Volunteer name'} /><input className={fieldClass} value={memberAgeBand} onChange={(event) => setMemberAgeBand(event.target.value)} placeholder={selectedRoster.type === 'children' ? 'Age band' : 'Optional note'} /><Button variant="outline" onClick={saveMember} disabled={saving}>Add member</Button></div><div className="mt-3 space-y-2">{selectedMembers.map((member) => <div key={member.id} className="flex items-center justify-between rounded-lg border border-border bg-white/5 px-3 py-2 text-xs"><span>{member.displayName}{member.ageBand ? ` · ${member.ageBand}` : ''}</span><button aria-label={`Delete ${member.displayName}`} className="rounded p-1 text-red-300 hover:bg-red-500/10" onClick={() => AdminDataService.deleteRosterMember(member.id).then(() => showToast('Roster member deleted.')).catch((problem) => showToast(problem instanceof Error ? problem.message : 'Member deletion failed.'))}><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div></div>}
         </section>
 
         <section className="rounded-2xl border border-border bg-white/[0.03] p-5">
