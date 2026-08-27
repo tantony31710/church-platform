@@ -213,13 +213,13 @@ def ask_rag(payload: dict[str, Any], _: dict[str, Any] = Depends(current_user)) 
         f"\n\nQuestion: {question}\n\nGrounded documents:\n{context}"
     )
     try:
-        response = client.models.generate_content(model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"), contents=prompt)
+        response = client.models.generate_content(model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash"), contents=prompt)
         answer = str(getattr(response, "text", "") or "").strip()
     except Exception as error:
         raise HTTPException(status_code=502, detail=f"Gemini request failed: {error}") from error
     if not answer:
         raise HTTPException(status_code=502, detail="Gemini returned an empty answer.")
-    return {"answer": answer, "retrievedDocuments": matched, "modelUsed": os.getenv("GEMINI_MODEL", "gemini-2.5-flash")}
+    return {"answer": answer, "retrievedDocuments": matched, "modelUsed": os.getenv("GEMINI_MODEL", "gemini-3.7-flash")}
 
 
 @app.post("/api/python/churn-analysis")

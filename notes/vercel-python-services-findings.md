@@ -35,3 +35,9 @@ Source: https://vercel.com/docs/frameworks/backend/express
 Vercel can deploy an Express app as one serverless function when the application is exported from a supported entrypoint. Static assets are not served by `express.static()` in that mode; they belong in `public/**`. The existing ChurchConnect `server.ts` uses a port listener, serves the Vite `dist` folder, and launches `python3` as a subprocess, so an Express-on-Vercel migration would need its own entrypoint and serverless/static-serving adjustments.
 
 Implementation implication: a raw `api/index.py` with the current CLI engine is not sufficient. The safe Vercel-native design is a FastAPI application entrypoint in an independently built backend service, with shared engine modules imported directly and server-side Firebase/Gemini configuration. If using the Services model, top-level rewrites must route `/api/*` to the backend service and all other paths to the Vite frontend service.
+
+## Gemini model availability
+
+Source: https://ai.google.dev/gemini-api/docs/models
+
+The current Gemini API model page lists Gemini 3.7 Flash as available and labels older model families such as Gemini 2.0 Flash as shut down. The production Vercel runtime log for `/api/ai/ask-rag` showed a 404 for `gemini-2.5-flash`. The service should therefore default to the currently available `gemini-3.7-flash`, while allowing `GEMINI_MODEL` to override it for a model enabled for the user’s API key.

@@ -597,7 +597,8 @@ POST /api/python/analytics-report
 GET  /api/python/analytics-report/latest
 ```
 
-The service reads `users`, `tasks`, and `attendance` from live Firestore for administrator ML, workbench, optimization, and analytics requests. It never accepts a client-provided administrator role as proof of authorization. It verifies the Firebase ID token, verified-email state, `admin` claim, allowlisted email, and same-UID Firestore profile role before administrator routes run.
+The service reads `users`, `tasks`, and `attendance` from live Firestore for administrator ML, workbench, optimization, and analytics requests. RAG retrieval is deterministic and grounded in the Python ministry knowledge corpus; Gemini generation is enabled only when `GEMINI_API_KEY` is configured and the selected `GEMINI_MODEL` is available to that key.
+ It never accepts a client-provided administrator role as proof of authorization. It verifies the Firebase ID token, verified-email state, `admin` claim, allowlisted email, and same-UID Firestore profile role before administrator routes run.
 
 Vercel Production environment variables should be configured as follows:
 
@@ -613,7 +614,7 @@ VITE_FIREBASE_PROJECT_ID=church-platform-36107
 FIREBASE_SERVICE_ACCOUNT=<complete service-account JSON>
 ADMIN_EMAILS=tantony31710@gmail.com
 GEMINI_API_KEY=<server secret>
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.7-flash
 ```
 
 Do not commit `.env.local`, service-account JSON, Gemini keys, or Firebase Admin private keys. The Vercel service configuration is defined in `vercel.json`. Each service declares its framework explicitly—`vite` for the frontend and `fastapi` for the Python backend—so the root-level Express entrypoint is not selected accidentally. The frontend service handles non-API paths and the Python service handles `/api/*`.
@@ -624,4 +625,4 @@ For local Python-service contract tests, install `api/requirements.txt` and run:
 python scripts/test_python_service.py
 ```
 
-The test suite covers the unauthenticated health response, grounded RAG fallback, administrator workbench execution, non-admin denial, all live-data ML/optimization routes, and the three-domain analytics report. Production data is read from Firestore; test fixtures exist only to validate the HTTP and authorization contract.
+The test suite covers the unauthenticated health response, grounded RAG fallback, administrator workbench execution, non-admin denial, all live-data ML/optimization routes, and the three-domain analytics report. If production logs show a Gemini 404, inspect `GEMINI_MODEL` first; the service default is `gemini-3.7-flash`, and an explicitly configured model must be available to the deployed API key. Production data is read from Firestore; test fixtures exist only to validate the HTTP and authorization contract.
