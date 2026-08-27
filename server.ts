@@ -18,6 +18,32 @@ type AuthenticatedRequest = Request & {
 
 app.use(express.json({ limit: '256kb' }));
 
+const allowedCorsOrigins = String(process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const requestOrigin = req.header('origin');
+  if (!requestOrigin) return next();
+
+  const isAllowedOrigin = allowedCorsOrigins.includes(requestOrigin);
+  if (isAllowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '600');
+    res.setHeader('Vary', 'Origin');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return isAllowedOrigin
+      ? res.sendStatus(204)
+      : res.status(403).json({ error: 'Origin is not allowed.' });
+  }
+  return next();
+});
+
 const apiLimiter = rateLimit({
   windowMs: 60_000,
   limit: 120,

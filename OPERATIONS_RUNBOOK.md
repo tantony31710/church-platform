@@ -549,3 +549,33 @@ pnpm run test:admin:emulator
 ```
 
 The rule test must remain part of release validation whenever `firestore.rules`, the Auth claim model, or administrator collections change.
+
+## 21. Connect the Vercel frontend to the Python API
+
+A static Vercel deployment cannot execute the Express server’s POST routes by itself. The Python workbench and RAG requests are defined in `server.ts` as `POST /api/python/run` and `POST /api/ai/ask-rag`. When Vercel hosts only the static client, configure the client with the public API base URL of the separately deployed Cloud Run service:
+
+```text
+Vercel Production:
+VITE_API_BASE_URL=https://YOUR-CLOUD-RUN-SERVICE-URL
+```
+
+Configure the Cloud Run service with the exact Vercel origin and server-only values:
+
+```text
+CORS_ORIGINS=https://church-platform-zeta.vercel.app
+ADMIN_EMAILS=tantony31710@gmail.com
+GEMINI_API_KEY=server-secret
+```
+
+If a custom Vercel domain is used, include each exact HTTPS origin as a comma-separated value. Do not use `*` with authenticated requests. Redeploy Cloud Run after changing `CORS_ORIGINS` and redeploy Vercel after changing `VITE_API_BASE_URL`.
+
+The browser now refreshes its Firebase ID token once after a 401 response, reports a clear session-expired message for a persistent 401, reports administrator denial for 403, and identifies a 405 as a frontend/API deployment mismatch. Browser connectivity failures are reported separately from Python server errors. This preserves the security boundary while making configuration failures diagnosable.
+
+For a simple production check, use the deployed API URL:
+
+```powershell
+$API_URL = "https://YOUR-CLOUD-RUN-SERVICE-URL"
+Invoke-RestMethod "$API_URL/api/health" | ConvertTo-Json
+```
+
+The health endpoint should report `apiAuthRequired: true`, `adminConfigured: true`, and `pythonReady: true`. A browser request from the Vercel origin must also pass its CORS preflight before authenticated POST requests can reach the Python engine.

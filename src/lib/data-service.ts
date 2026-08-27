@@ -18,12 +18,67 @@ import {
 import { collection, deleteDoc, doc, documentId, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from './firebase/client';
 
+const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+
+function resolveApiUrl(input: RequestInfo | URL): RequestInfo | URL {
+  if (configuredApiBaseUrl && typeof input === 'string' && input.startsWith('/api/')) {
+    return `${configuredApiBaseUrl}${input}`;
+  }
+  return input;
+}
+
 async function authorizedApiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new Error('You appear to be offline. Reconnect to the internet and try again.');
+  }
+
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(input, { ...init, headers });
+  const url = resolveApiUrl(input);
+
+  const request = async (forceRefresh: boolean) => {
+    const token = auth.currentUser ? await auth.currentUser.getIdToken(forceRefresh) : null;
+    const requestHeaders = new Headers(headers);
+    if (token) requestHeaders.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...init, headers: requestHeaders });
+  };
+
+  try {
+    const response = await request(false);
+    if (response.status === 401 && auth.currentUser) {
+      return await request(true);
+    }
+    return response;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error('The Python service could not be reached. Check the API deployment and connection.');
+    }
+    throw error;
+  }
+}
+
+async function throwApiError(response: Response, operation: string): Promise<never> {
+  let serverMessage = '';
+  try {
+    const body = await response.clone().json();
+    if (typeof body?.error === 'string') serverMessage = body.error;
+  } catch {
+    // Keep the status-based message when the server did not return JSON.
+  }
+
+  if (response.status === 401) {
+    throw new Error(`${operation}: your session expired. Sign in again and retry.`);
+  }
+  if (response.status === 403) {
+    throw new Error(`${operation}: administrator access was denied.`);
+  }
+  if (response.status === 405) {
+    throw new Error(`${operation}: the deployed frontend is not connected to the Python API. Configure VITE_API_BASE_URL and redeploy.`);
+  }
+  if (response.status >= 500) {
+    throw new Error(`${operation}: the Python service reported a server error${serverMessage ? `: ${serverMessage}` : '.'}`);
+  }
+  throw new Error(`${operation} (${response.status})${serverMessage ? `: ${serverMessage}` : ''}`);
 }
 
 const STORAGE_KEYS = {
@@ -1027,7 +1082,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, top_k }),
     });
-    if (!res.ok) throw new Error(`Python RAG request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'Python RAG request failed');
     const data = await res.json();
     if (!Array.isArray(data.results)) throw new Error('Python RAG returned an invalid response');
     return data.results;
@@ -1040,7 +1095,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volunteers }),
     });
-    if (!res.ok) throw new Error(`Python churn request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'Python churn request failed');
     const data = await res.json();
     if (!Array.isArray(data.predictions)) throw new Error('Python churn returned an invalid response');
     return data.predictions;
@@ -1053,7 +1108,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volunteers }),
     });
-    if (!res.ok) throw new Error(`Python clustering request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'Python clustering request failed');
     const data = await res.json();
     if (!data.clustering?.clusters) throw new Error('Python clustering returned an invalid response');
     return data.clustering;
@@ -1066,7 +1121,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ attendance }),
     });
-    if (!res.ok) throw new Error(`Python forecast request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'Python forecast request failed');
     const data = await res.json();
     if (!data.forecast) throw new Error('Python forecast returned an invalid response');
     return data.forecast;
@@ -1080,7 +1135,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tasks: openTasks, volunteers }),
     });
-    if (!res.ok) throw new Error(`Python task optimization request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'Python task optimization request failed');
     const data = await res.json();
     if (!data.optimization?.optimizedAssignments) throw new Error('Python optimizer returned an invalid response');
     return data.optimization;
@@ -1092,7 +1147,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, volunteers: this.getUsers(), tasks: this.getTasks(), attendance: this.getAttendance() }),
     });
-    if (!res.ok) throw new Error(`Python workbench request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'Python workbench request failed');
     return res.json();
   },
 
@@ -1102,7 +1157,7 @@ export const DataService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, userContext }),
     });
-    if (!res.ok) throw new Error(`AI RAG request failed (${res.status})`);
+    if (!res.ok) await throwApiError(res, 'AI RAG request failed');
     const data = await res.json();
     if (!data.answer) throw new Error('AI RAG returned an invalid response');
     return data;
