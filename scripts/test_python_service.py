@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -91,6 +92,30 @@ def test_rag_returns_grounded_fallback_without_gemini(monkeypatch) -> None:
         service.app.dependency_overrides.clear()
     assert response.status_code == 200
     assert response.json()["results"]
+
+
+def test_rag_falls_back_from_unavailable_configured_model(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeModels:
+        def generate_content(self, *, model: str, contents: str):
+            calls.append(model)
+            if model == "gemini-2.5-flash":
+                raise RuntimeError("404 Not Found")
+            return SimpleNamespace(text="Grounded childcare answer")
+
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setattr(service, "_gemini", lambda: SimpleNamespace(models=FakeModels()))
+    service.app.dependency_overrides[service.current_user] = lambda: {"uid": "admin-1"}
+    try:
+        response = client.post("/api/ai/ask-rag", json={"question": "What is the two-adult rule?"})
+    finally:
+        service.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert calls == ["gemini-2.5-flash", "gemini-3.7-flash"]
+    assert response.json()["modelUsed"] == "gemini-3.7-flash"
+    assert response.json()["retrievedDocuments"]
 
 
 def test_workbench_requires_designated_admin() -> None:

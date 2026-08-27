@@ -213,13 +213,35 @@ def ask_rag(payload: dict[str, Any], _: dict[str, Any] = Depends(current_user)) 
         f"\n\nQuestion: {question}\n\nGrounded documents:\n{context}"
     )
     try:
-        response = client.models.generate_content(model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash"), contents=prompt)
-        answer = str(getattr(response, "text", "") or "").strip()
+        default_model = "gemini-3.7-flash"
+        configured_model = os.getenv("GEMINI_MODEL", "").strip() or default_model
+        models_to_try = [configured_model]
+        if configured_model != default_model:
+            models_to_try.append(default_model)
+
+        answer = ""
+        model_used = configured_model
+        last_error: Exception | None = None
+        for model_name in models_to_try:
+            try:
+                response = client.models.generate_content(model=model_name, contents=prompt)
+                answer = str(getattr(response, "text", "") or "").strip()
+                model_used = model_name
+                if answer:
+                    break
+            except Exception as error:
+                last_error = error
+                if "404" not in str(error):
+                    break
+        if not answer and last_error is not None:
+            raise HTTPException(status_code=502, detail=f"Gemini request failed: {last_error}") from last_error
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(status_code=502, detail=f"Gemini request failed: {error}") from error
     if not answer:
         raise HTTPException(status_code=502, detail="Gemini returned an empty answer.")
-    return {"answer": answer, "retrievedDocuments": matched, "modelUsed": os.getenv("GEMINI_MODEL", "gemini-3.7-flash")}
+    return {"answer": answer, "retrievedDocuments": matched, "modelUsed": model_used}
 
 
 @app.post("/api/python/churn-analysis")
