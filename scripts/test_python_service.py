@@ -118,6 +118,27 @@ def test_rag_falls_back_from_unavailable_configured_model(monkeypatch) -> None:
     assert response.json()["retrievedDocuments"]
 
 
+def test_rag_returns_grounded_fallback_on_gemini_outage(monkeypatch) -> None:
+    class UnavailableModels:
+        def generate_content(self, *, model: str, contents: str):
+            raise RuntimeError("503 Service Unavailable")
+
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setattr(service, "_gemini", lambda: SimpleNamespace(models=UnavailableModels()))
+    service.app.dependency_overrides[service.current_user] = lambda: {"uid": "admin-1"}
+    try:
+        response = client.post("/api/ai/ask-rag", json={"question": "What is the two-adult rule?"})
+    finally:
+        service.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generationStatus"] == "fallback"
+    assert body["modelUsed"] == "python-rag-retrieval-fallback"
+    assert body["retrievedDocuments"]
+    assert "Grounded policy documents retrieved" in body["answer"]
+
+
 def test_workbench_requires_designated_admin() -> None:
     service.app.dependency_overrides[service.designated_admin] = lambda: admin_user()
     original_dataset = service._live_dataset
