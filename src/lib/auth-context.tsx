@@ -34,7 +34,7 @@ const designatedAdminEmails = normalizeAdminEmails(
 
 function profileFromFirestore(firebaseUser: User, value: Record<string, any>, effectiveRole?: Role): UserProfile {
   return {
-    id: firebaseUser.uid,
+    id: firebaseUser.,
     name: value.name || firebaseUser.displayName || 'Volunteer',
     email: firebaseUser.email || value.email || '',
     role: effectiveRole || (value.role === 'admin' ? 'admin' : 'volunteer'),
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       unsubscribeProfile = onSnapshot(
-        doc(db, 'users', nextUser.uid),
+        doc(db, 'users', nextUser.),
         async (snapshot) => {
           if (!snapshot.exists()) {
             setProfile(null);
@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             allowedEmails: designatedAdminEmails,
           });
           const nextProfile = profileFromFirestore(nextUser, snapshot.data(), effectiveRole);
-          DataService.startLiveSync(nextUser.uid, effectiveRole === 'admin');
+          DataService.startLiveSync(nextUser., effectiveRole === 'admin');
           setProfile(nextProfile);
           setRole(effectiveRole);
           setLoading(false);
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     delete (safeUpdates as Partial<UserProfile>).points;
     delete (safeUpdates as Partial<UserProfile>).tasksCompletedCount;
     delete (safeUpdates as Partial<UserProfile>).attendanceCount;
-    void updateDoc(doc(db, 'users', firebaseUser.uid), safeUpdates as Record<string, unknown>).catch((error) => {
+    void updateDoc(doc(db, 'users', firebaseUser.), safeUpdates as Record<string, unknown>).catch((error) => {
       console.error('[Auth] Profile update failed:', error);
     });
   };
