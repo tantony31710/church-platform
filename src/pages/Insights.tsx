@@ -40,6 +40,7 @@ export default function InsightsPage() {
   const [users, setUsers] = useState(() => DataService.getUsers());
   const [tasks, setTasks] = useState(() => DataService.getTasks());
   const [attendance, setAttendance] = useState(() => DataService.getAttendance());
+  const [reportRunning, setReportRunning] = useState(false);
 
   useEffect(() => {
     if (role !== 'admin' && activeTab !== 'rag') setActiveTab('rag');
@@ -64,38 +65,23 @@ export default function InsightsPage() {
   const totalPoints = users.reduce((acc, u) => acc + (u.points || 0), 0);
   const totalCompleted = tasks.filter((t) => t.status === 'completed').length;
 
-  const handleExportReport = () => {
-    const report = {
-      timestamp: new Date().toISOString(),
-      church: 'Grace Community Church',
-      summary: {
-        totalVolunteers,
-        openTasks,
-        totalPoints,
-        totalCompletedTasks: totalCompleted,
-      },
-      volunteers: users.map((u) => ({
-        name: u.name,
-        email: u.email,
-        points: u.points,
-        role: u.role,
-        skills: u.skills,
-      })),
-      tasks: tasks.map((t) => ({
-        title: t.title,
-        status: t.status,
-        points: t.pointsValue,
-        assignedTo: t.assignedToName || 'Unassigned',
-      })),
-    };
-
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `church-insights-report-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    showToast('Analytics report exported as JSON!');
+  const handleExportReport = async () => {
+    setReportRunning(true);
+    try {
+      const response = await DataService.fetchPythonAnalyticsReport(true);
+      const blob = new Blob([JSON.stringify(response.report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `church-insights-report-${new Date().toISOString().split('T')[0]}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      showToast('Live Python analytics report generated and saved.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to generate the analytics report.', 'error');
+    } finally {
+      setReportRunning(false);
+    }
   };
 
   return (
@@ -116,10 +102,17 @@ export default function InsightsPage() {
           </div>
 
           {role === 'admin' && (
-            <Button variant="outline" size="sm" onClick={handleExportReport} className="gap-2 self-start sm:self-auto">
-              <Download className="h-4 w-4" />
-              Export Full Analytics (JSON)
-            </Button>
+                          <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportReport}
+                disabled={reportRunning}
+                className="gap-2 self-start sm:self-auto"
+              >
+                <Download className="h-4 w-4" />
+                {reportRunning ? 'Generating Live Report…' : 'Generate & Export Live Report (JSON)'}
+              </Button>
+
           )}
         </div>
 

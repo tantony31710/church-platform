@@ -1151,6 +1151,22 @@ export const DataService = {
     return res.json();
   },
 
+  async fetchPythonAnalyticsReport(save = true): Promise<{ success: boolean; report: Record<string, unknown>; saved: boolean; reportId?: string | null }> {
+    const res = await authorizedApiFetch('/api/python/analytics-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ save }),
+    });
+    if (!res.ok) await throwApiError(res, 'Python analytics report request failed');
+    return res.json();
+  },
+
+  async fetchLatestPythonAnalyticsReport(): Promise<{ success: boolean; report: Record<string, unknown> | null; reportId?: string }> {
+    const res = await authorizedApiFetch('/api/python/analytics-report/latest');
+    if (!res.ok) await throwApiError(res, 'Latest Python analytics report request failed');
+    return res.json();
+  },
+
   async askGeminiRagAssistant(question: string, userContext: any): Promise<{ answer: string; retrievedDocuments: PythonRagDocument[]; modelUsed: string }> {
     const res = await authorizedApiFetch('/api/ai/ask-rag', {
       method: 'POST',

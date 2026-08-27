@@ -579,3 +579,49 @@ Invoke-RestMethod "$API_URL/api/health" | ConvertTo-Json
 ```
 
 The health endpoint should report `apiAuthRequired: true`, `adminConfigured: true`, and `pythonReady: true`. A browser request from the Vercel origin must also pass its CORS preflight before authenticated POST requests can reach the Python engine.
+
+## 22. Vercel-native Python service
+
+The Vercel deployment now has a Python service entrypoint at `api/index.py` and reusable engine modules under `api/engine/`. The Python service exposes secure routes for authenticated RAG and administrator-only data workflows:
+
+```text
+GET  /api/health
+POST /api/python/rag-query
+POST /api/ai/ask-rag
+POST /api/python/run
+POST /api/python/churn-analysis
+POST /api/python/clustering
+POST /api/python/attendance-forecast
+POST /api/python/optimize-tasks
+POST /api/python/analytics-report
+GET  /api/python/analytics-report/latest
+```
+
+The service reads `users`, `tasks`, and `attendance` from live Firestore for administrator ML, workbench, optimization, and analytics requests. It never accepts a client-provided administrator role as proof of authorization. It verifies the Firebase ID token, verified-email state, `admin` claim, allowlisted email, and same-UID Firestore profile role before administrator routes run.
+
+Vercel Production environment variables should be configured as follows:
+
+```text
+VITE_API_BASE_URL=
+VITE_ADMIN_EMAILS=tantony31710@gmail.com
+VITE_FIREBASE_PROJECT_ID=church-platform-36107
+```
+
+`VITE_API_BASE_URL` remains empty because the frontend and Python service share the Vercel project and `/api` route surface. Keep these server-only values in Vercel’s server environment, not in `VITE_*` variables:
+
+```text
+FIREBASE_SERVICE_ACCOUNT=<complete service-account JSON>
+ADMIN_EMAILS=tantony31710@gmail.com
+GEMINI_API_KEY=<server secret>
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Do not commit `.env.local`, service-account JSON, Gemini keys, or Firebase Admin private keys. The Vercel service configuration is defined in `vercel.json`; the frontend service handles non-API paths and the Python service handles `/api/*`.
+
+For local Python-service contract tests, install `api/requirements.txt` and run:
+
+```powershell
+python scripts/test_python_service.py
+```
+
+The test suite covers the unauthenticated health response, grounded RAG fallback, administrator workbench execution, non-admin denial, all live-data ML/optimization routes, and the three-domain analytics report. Production data is read from Firestore; test fixtures exist only to validate the HTTP and authorization contract.
