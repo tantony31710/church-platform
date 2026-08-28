@@ -6,6 +6,7 @@ import { TaskManager } from '@/components/admin/task-manager';
 import { VolunteerManager } from '@/components/admin/volunteer-manager';
 import { ChurchSettingsManager } from '@/components/admin/church-settings';
 import { KnowledgeRosterManager } from '@/components/admin/knowledge-roster-manager';
+import { DataImportManager } from '@/components/admin/data-import-manager';
 import { DataService } from '@/lib/data-service';
 import { useToast } from '@/lib/toast-context';
 import { Button, Card } from '@/components/ui/button';
@@ -274,6 +275,7 @@ export default function AdminPage() {
             </div>
           </div>
           <KnowledgeRosterManager />
+          <div className="mt-6 border-t border-border pt-6"><DataImportManager /></div>
         </div>
       )}
     </div>

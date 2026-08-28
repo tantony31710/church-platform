@@ -100,9 +100,10 @@ service cloud.firestore {
 
       // A volunteer can only mark THEIR OWN attendance, and attendance
       // never awards points.
-      allow create: if isSignedIn() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.pointsAwarded == 0;
+      allow create: if (isAdmin() && request.resource.data.pointsAwarded == 0) ||
+        (isSignedIn() &&
+          request.resource.data.userId == request.auth.uid &&
+          request.resource.data.pointsAwarded == 0);
 
       allow update, delete: if isAdmin();
     }

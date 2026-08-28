@@ -8,6 +8,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase/client';
+import type { ImportRow, ImportTarget } from './admin-import';
 
 export type ManagedRosterType = 'volunteers' | 'children';
 
@@ -119,5 +120,20 @@ export const AdminDataService = {
 
   async deleteKnowledgeDocument(id: string): Promise<void> {
     await deleteDoc(doc(db, 'knowledge_documents', id));
+  },
+
+  async importRecords(target: ImportTarget, rows: ImportRow[]): Promise<number> {
+    const collectionName = target;
+    await Promise.all(rows.map(async (row) => {
+      const id = String(row.id);
+      const { id: _ignored, ...payload } = row;
+      await setDoc(doc(db, collectionName, id), {
+        ...payload,
+        fixture: true,
+        environment: 'development',
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }));
+    return rows.length;
   },
 };
